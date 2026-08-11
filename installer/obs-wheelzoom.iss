@@ -1,5 +1,5 @@
 #define MyAppName "OBS_wheelzoom"
-#define MyAppVersion "0.1.6"
+#define MyAppVersion "1.0"
 #define MyAppPublisher "OBS_wheelzoom"
 #define MyAppExeName "obs64.exe"
 

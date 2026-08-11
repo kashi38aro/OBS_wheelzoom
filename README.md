@@ -67,7 +67,7 @@ Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用�
 ZIPパッケージを使う場合は，OBS Studioを終了してから，内容をOBS Studioのインストール先へ展開してください．Release本文のChecksums欄に，ダウンロードファイルのSHA256チェックサムを記載しています．ダウンロード後は，次のコマンドで確認できます．
 
 ```powershell
-Get-FileHash .\OBS_wheelzoom-v0.1.6-setup.exe -Algorithm SHA256
+Get-FileHash .\OBS_wheelzoom-v1.0-setup.exe -Algorithm SHA256
 ```
 
 インストーラーへのコード署名は，信頼されたコード署名証明書が必要です．証明書を用意した環境では，`scripts/Sign-Installer.ps1`で署名できます．
