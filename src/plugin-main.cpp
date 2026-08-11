@@ -1,5 +1,5 @@
 /*
- * OBS Zoom Scroll
+ * OBS_scrollzoom
  * Copyright (C) 2026 kashi38aro
  *
  * This program is free software: you can redistribute it and/or modify
@@ -47,7 +47,9 @@ constexpr double kMinimumZoom = 1.0;
 constexpr double kMaximumZoom = 100.0;
 constexpr double kPreviewEdgePixels = 10.0;
 constexpr char kZoomFilterId[] = "obs_zoom_scroll_filter";
-constexpr char kZoomFilterName[] = "OBS Zoom Scroll";
+constexpr char kZoomFilterName[] = "OBS_scrollzoom";
+constexpr char kLegacyZoomFilterName[] = "OBS Zoom Scroll";
+constexpr char kZoomFilterDisplayName[] = "OBS_scrollzoom";
 constexpr int kZoomStateVersion = 2;
 
 struct CanvasPoint {
@@ -165,7 +167,7 @@ static double clamp_offset(double offset, double zoom)
 
 static const char *zoom_filter_get_name(void *)
 {
-	return "Cursor Zoom";
+	return kZoomFilterDisplayName;
 }
 
 static void zoom_filter_defaults(obs_data_t *settings)
@@ -315,6 +317,12 @@ static void initialize_zoom_filter_info()
 static obs_source_t *get_or_create_zoom_filter(obs_source_t *source)
 {
 	obs_source_t *filter = obs_source_get_filter_by_name(source, kZoomFilterName);
+	if (filter) {
+		return filter;
+	}
+
+	/* Keep using filters created by versions before the display-name change. */
+	filter = obs_source_get_filter_by_name(source, kLegacyZoomFilterName);
 	if (filter) {
 		return filter;
 	}

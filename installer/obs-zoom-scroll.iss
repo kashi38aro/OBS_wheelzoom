@@ -1,6 +1,6 @@
-#define MyAppName "OBS Zoom Scroll"
-#define MyAppVersion "0.1.1"
-#define MyAppPublisher "OBS Zoom Scroll"
+#define MyAppName "OBS_scrollzoom"
+#define MyAppVersion "0.1.2"
+#define MyAppPublisher "OBS_scrollzoom"
 #define MyAppExeName "obs64.exe"
 
 [Setup]
@@ -15,7 +15,7 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=obs-zoom-scroll-v{#MyAppVersion}-setup
+OutputBaseFilename=OBS_scrollzoom-v{#MyAppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

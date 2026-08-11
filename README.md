@@ -1,4 +1,4 @@
-# OBS Zoom Scroll
+# OBS_scrollzoom
 
 ## 制作者・ライセンス
 
@@ -23,7 +23,8 @@ OBS Studioでプレビュー上のソースを選択した状態で、`Ctrl`を�
 ## 対応環境
 
 - OBS Studio 29.1以降（Qt 6、OBS frontend APIを使用）
-- Windows / macOS / Linux
+- Windows x64: v0.1.2インストーラーを提供し、Windowsでビルド・動作確認済み
+- macOS / Linux: ソースコードは移植可能な構成ですが、現時点では公式ビルド・実機動作確認・配布バイナリがないため、対応保証対象外
 
 ## ビルド
 
@@ -54,9 +55,11 @@ obs-zoom-scroll loaded: Ctrl+wheel zooms selected sources around the cursor
 
 ## インストーラー
 
-Windows向けのInno Setupスクリプトを`installer/obs-zoom-scroll.iss`に用意しています。Inno Setup 6でコンパイルすると、`dist/obs-zoom-scroll-v0.1.1-setup.exe`が生成されます。インストーラーはOBS Studioのインストール先を選択し、DLLとシェーダーを正しいプラグインフォルダへ配置します。
+Windows向けのInno Setupスクリプトを`installer/obs-zoom-scroll.iss`に用意しています。Inno Setup 6でコンパイルすると、`dist/OBS_scrollzoom-v0.1.2-setup.exe`が生成されます。インストーラーはOBS Studioのインストール先を選択し、DLLとシェーダーを正しいプラグインフォルダへ配置します。
 
 ライセンス本文は[LICENSE](LICENSE)、制作者情報は[AUTHORS.md](AUTHORS.md)、第三者コンポーネントの案内は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照してください。
+
+なお、既存ユーザーとの互換性維持のため、内部プラグインID・DLL名・データフォルダ名には従来の`obs-zoom-scroll`を使用しています。正式な表示名は`OBS_scrollzoom`です。
 
 ## 実装上の注意
 
