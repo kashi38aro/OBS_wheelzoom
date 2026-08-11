@@ -1,5 +1,12 @@
 # OBS Zoom Scroll
 
+## 制作者・ライセンス
+
+- 制作者・メンテナ: `kashi38aro`
+- ライセンス: [GNU GPL v2.0 or later](LICENSE)
+- 本プロジェクトは、設計・実装・デバッグ・ビルド・リリース作業にOpenAI Codexを用いたAI支援開発で制作しました。最終的な仕様決定、動作確認、公開判断は制作者が行っています。
+- OBS Studio公式とは独立した第三者プラグインです。
+
 OBS Studioでプレビュー上のソースを選択した状態で、`Ctrl`を押しながらマウスホイールを回すと、カーソル位置を基準に選択中の映像ソースをズームします。
 
 - ホイール上: ズームイン
@@ -47,7 +54,9 @@ obs-zoom-scroll loaded: Ctrl+wheel zooms selected sources around the cursor
 
 ## インストーラー
 
-Windows向けのInno Setupスクリプトを`installer/obs-zoom-scroll.iss`に用意しています。Inno Setup 6でコンパイルすると、`dist/obs-zoom-scroll-v0.1.0-setup.exe`が生成されます。インストーラーはOBS Studioのインストール先を選択し、DLLとシェーダーを正しいプラグインフォルダへ配置します。
+Windows向けのInno Setupスクリプトを`installer/obs-zoom-scroll.iss`に用意しています。Inno Setup 6でコンパイルすると、`dist/obs-zoom-scroll-v0.1.1-setup.exe`が生成されます。インストーラーはOBS Studioのインストール先を選択し、DLLとシェーダーを正しいプラグインフォルダへ配置します。
+
+ライセンス本文は[LICENSE](LICENSE)、制作者情報は[AUTHORS.md](AUTHORS.md)、第三者コンポーネントの案内は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照してください。
 
 ## 実装上の注意
 

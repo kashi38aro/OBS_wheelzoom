@@ -1,5 +1,5 @@
 #define MyAppName "OBS Zoom Scroll"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.1"
 #define MyAppPublisher "OBS Zoom Scroll"
 #define MyAppExeName "obs64.exe"
 
