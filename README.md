@@ -1,12 +1,5 @@
 # OBS_scrollzoom
 
-## Author & License
-
-- Author/Maintainer: `kashi38aro`
-- License: [GNU GPL v2.0 or later](LICENSE)
-- Development assistance: OpenAI Codex.
-- Independent third-party plugin for OBS Studio.
-
 OBS Studioでプレビュー上のソースを選択した状態で、`Ctrl`を押しながらマウスホイールを回すと、カーソル位置を基準に選択中の映像ソースをズームします。
 
 - ホイール上: ズームイン
@@ -64,3 +57,10 @@ Windows向けのInno Setupスクリプトを`installer/obs-zoom-scroll.iss`に�
 ## 実装上の注意
 
 プレビューの表示倍率やスクロール位置を取得するため、OBS本体の`preview`、`previewScalingMode`、`previewScalePercent`、`previewXScrollBar`、`previewYScrollBar`というUIオブジェクト名を利用しています。OBS本体のUIオブジェクト名が将来変更された場合は、`src/plugin-main.cpp`の対応箇所を更新してください。
+
+## Author & License
+
+- Author/Maintainer: `kashi38aro`
+- License: [GNU GPL v2.0 or later](LICENSE)
+- Development assistance: OpenAI Codex.
+- Independent third-party plugin for OBS Studio.
