@@ -24,6 +24,7 @@
 
 #include <QApplication>
 #include <QAction>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QCursor>
 #include <QDialog>
@@ -86,6 +87,10 @@ struct ZoomFilterData {
 struct PluginSettings {
 	int modifier = int(Qt::ControlModifier);
 	double zoomPerWheelStep = kDefaultZoomPerWheelStep;
+	bool syncPreviewProgram = true;
+	bool operateLocked = true;
+	bool operateGroups = true;
+	bool operateHidden = false;
 };
 
 PluginSettings pluginSettings;
@@ -118,6 +123,10 @@ static void load_plugin_settings()
 	const double savedStep = settings.value(QStringLiteral("zoom_per_wheel_step"), kDefaultZoomPerWheelStep).toDouble();
 	pluginSettings.zoomPerWheelStep =
 		std::clamp(savedStep, kMinimumZoomPerWheelStep, kMaximumZoomPerWheelStep);
+	pluginSettings.syncPreviewProgram = settings.value(QStringLiteral("sync_preview_program"), true).toBool();
+	pluginSettings.operateLocked = settings.value(QStringLiteral("operate_locked"), true).toBool();
+	pluginSettings.operateGroups = settings.value(QStringLiteral("operate_groups"), true).toBool();
+	pluginSettings.operateHidden = settings.value(QStringLiteral("operate_hidden"), false).toBool();
 }
 
 static void save_plugin_settings()
@@ -125,6 +134,10 @@ static void save_plugin_settings()
 	QSettings settings = settings_store();
 	settings.setValue(QStringLiteral("modifier"), pluginSettings.modifier);
 	settings.setValue(QStringLiteral("zoom_per_wheel_step"), pluginSettings.zoomPerWheelStep);
+	settings.setValue(QStringLiteral("sync_preview_program"), pluginSettings.syncPreviewProgram);
+	settings.setValue(QStringLiteral("operate_locked"), pluginSettings.operateLocked);
+	settings.setValue(QStringLiteral("operate_groups"), pluginSettings.operateGroups);
+	settings.setValue(QStringLiteral("operate_hidden"), pluginSettings.operateHidden);
 	settings.sync();
 }
 
@@ -159,6 +172,22 @@ public:
 		layout->addRow(QStringLiteral("ズームキー"), modifierCombo);
 		layout->addRow(QStringLiteral("1スクロールあたりの倍率"), zoomStepSpin);
 
+		syncPreviewProgramCheck = new QCheckBox(QStringLiteral("PreviewとProgramを同期する"), this);
+		syncPreviewProgramCheck->setChecked(pluginSettings.syncPreviewProgram);
+		layout->addRow(syncPreviewProgramCheck);
+
+		operateLockedCheck = new QCheckBox(QStringLiteral("ロック中のソースを操作する"), this);
+		operateLockedCheck->setChecked(pluginSettings.operateLocked);
+		layout->addRow(operateLockedCheck);
+
+		operateGroupsCheck = new QCheckBox(QStringLiteral("グループ内の選択項目を操作する"), this);
+		operateGroupsCheck->setChecked(pluginSettings.operateGroups);
+		layout->addRow(operateGroupsCheck);
+
+		operateHiddenCheck = new QCheckBox(QStringLiteral("非表示のソースも操作する"), this);
+		operateHiddenCheck->setChecked(pluginSettings.operateHidden);
+		layout->addRow(operateHiddenCheck);
+
 		QDialogButtonBox *buttons =
 			new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
 		layout->addRow(buttons);
@@ -172,6 +201,10 @@ protected:
 	{
 		pluginSettings.modifier = modifierCombo->currentData().toInt();
 		pluginSettings.zoomPerWheelStep = zoomStepSpin->value();
+		pluginSettings.syncPreviewProgram = syncPreviewProgramCheck->isChecked();
+		pluginSettings.operateLocked = operateLockedCheck->isChecked();
+		pluginSettings.operateGroups = operateGroupsCheck->isChecked();
+		pluginSettings.operateHidden = operateHiddenCheck->isChecked();
 		save_plugin_settings();
 		QDialog::accept();
 	}
@@ -179,6 +212,10 @@ protected:
 private:
 	QComboBox *modifierCombo = nullptr;
 	QDoubleSpinBox *zoomStepSpin = nullptr;
+	QCheckBox *syncPreviewProgramCheck = nullptr;
+	QCheckBox *operateLockedCheck = nullptr;
+	QCheckBox *operateGroupsCheck = nullptr;
+	QCheckBox *operateHiddenCheck = nullptr;
 };
 
 static void open_settings_dialog()
@@ -547,31 +584,50 @@ static bool source_uv_from_anchor(obs_scene_t *scene, obs_sceneitem_t *item, con
 	return true;
 }
 
-struct SelectedItems {
-	std::vector<obs_sceneitem_t *> items;
+struct SelectedSceneItem {
+	obs_scene_t *scene = nullptr;
+	obs_sceneitem_t *item = nullptr;
 };
 
-static bool collect_selected_items(obs_scene_t *, obs_sceneitem_t *item, void *param)
+struct SelectedItems {
+	obs_scene_t *scene = nullptr;
+	bool collectAllItems = false;
+	std::vector<SelectedSceneItem> items;
+};
+
+static bool collect_selected_items(obs_scene_t *scene, obs_sceneitem_t *item, void *param)
 {
 	SelectedItems *selected = static_cast<SelectedItems *>(param);
-	if (!obs_sceneitem_visible(item)) {
+	if (!selected->scene) {
+		selected->scene = scene;
+	}
+
+	if (!pluginSettings.operateHidden && !obs_sceneitem_visible(item)) {
+		return true;
+	}
+	if (!pluginSettings.operateLocked && obs_sceneitem_locked(item)) {
 		return true;
 	}
 
-	if (obs_sceneitem_selected(item)) {
-		if (obs_sceneitem_locked(item)) {
-			return true;
-		}
+	const bool isGroup = obs_sceneitem_is_group(item);
 
+	const bool itemSelected = obs_sceneitem_selected(item) || selected->collectAllItems;
+	if (itemSelected) {
 		obs_source_t *source = obs_sceneitem_get_source(item);
 		if (source && (obs_source_get_output_flags(source) & OBS_SOURCE_VIDEO)) {
 			obs_sceneitem_addref(item);
-			selected->items.push_back(item);
+			selected->items.push_back({selected->scene, item});
+		}
+		if (isGroup && pluginSettings.operateGroups) {
+			const bool previousCollectAllItems = selected->collectAllItems;
+			selected->collectAllItems = true;
+			obs_sceneitem_group_enum_items(item, collect_selected_items, param);
+			selected->collectAllItems = previousCollectAllItems;
 		}
 		return true;
 	}
 
-	if (!obs_sceneitem_is_group(item) || obs_sceneitem_locked(item)) {
+	if (!isGroup || !pluginSettings.operateGroups) {
 		return true;
 	}
 
@@ -581,8 +637,8 @@ static bool collect_selected_items(obs_scene_t *, obs_sceneitem_t *item, void *p
 
 static void release_selected_items(SelectedItems &selected)
 {
-	for (obs_sceneitem_t *item : selected.items) {
-		obs_sceneitem_release(item);
+	for (const SelectedSceneItem &selectedItem : selected.items) {
+		obs_sceneitem_release(selectedItem.item);
 	}
 	selected.items.clear();
 }
@@ -652,18 +708,21 @@ static bool zoom_selected_items(const CanvasPoint &anchor, double factor)
 	obs_scene_t *programScene = programSource ? obs_scene_from_source(programSource) : nullptr;
 
 	SelectedItems selected;
-	obs_scene_t *selectedScene = nullptr;
 	if (previewScene) {
+		selected.scene = previewScene;
 		obs_scene_enum_items(previewScene, collect_selected_items, &selected);
-		if (!selected.items.empty()) {
-			selectedScene = previewScene;
-		}
 	}
-	if (selected.items.empty() && programScene && programScene != previewScene) {
-		obs_scene_enum_items(programScene, collect_selected_items, &selected);
-		if (!selected.items.empty()) {
-			selectedScene = programScene;
+	if (!selected.items.empty()) {
+		if (pluginSettings.syncPreviewProgram && programScene && programScene != previewScene) {
+			SelectedItems programSelected;
+			programSelected.scene = programScene;
+			obs_scene_enum_items(programScene, collect_selected_items, &programSelected);
+			selected.items.insert(selected.items.end(), programSelected.items.begin(), programSelected.items.end());
+			programSelected.items.clear();
 		}
+	} else if (programScene && programScene != previewScene) {
+		selected.scene = programScene;
+		obs_scene_enum_items(programScene, collect_selected_items, &selected);
 	}
 	if (selected.items.empty()) {
 		if (previewSource) {
@@ -679,23 +738,19 @@ static bool zoom_selected_items(const CanvasPoint &anchor, double factor)
 	std::vector<FilterSnapshot> before;
 	std::vector<FilterSnapshot> after;
 
-	for (obs_sceneitem_t *item : selected.items) {
-		if (!obs_sceneitem_visible(item)) {
-			obs_sceneitem_release(item);
-			continue;
-		}
+	for (const SelectedSceneItem &selectedItem : selected.items) {
+		obs_sceneitem_t *item = selectedItem.item;
 
 		obs_source_t *source = obs_sceneitem_get_source(item);
 		const char *uuid = source ? obs_source_get_uuid(source) : nullptr;
 		if (!source || !uuid || std::find(processedSources.begin(), processedSources.end(), uuid) != processedSources.end()) {
-			obs_sceneitem_release(item);
 			continue;
 		}
 
 		ZoomFilterState current;
 		vec2 sourceUv;
-		if (!get_zoom_filter_state(source, current) || !source_uv_from_anchor(selectedScene, item, anchor, sourceUv)) {
-			obs_sceneitem_release(item);
+		if (!get_zoom_filter_state(source, current) ||
+		    !source_uv_from_anchor(selectedItem.scene, item, anchor, sourceUv)) {
 			continue;
 		}
 
@@ -718,8 +773,8 @@ static bool zoom_selected_items(const CanvasPoint &anchor, double factor)
 		if (set_zoom_filter_state(source, next)) {
 			after.push_back({uuid, next});
 		}
-		obs_sceneitem_release(item);
 	}
+	release_selected_items(selected);
 
 	if (!before.empty() && before.size() == after.size()) {
 		const std::string undoStates = serialize_filter_states(before);

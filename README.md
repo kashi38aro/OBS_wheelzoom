@@ -8,10 +8,9 @@ OBS_wheelzoom is an OBS Studio plugin that zooms the selected source toward the 
 
 動画内のウェブページは [https://caind.live/](https://caind.live/) です．
 
-- ホイール1段につき，デフォルトでは約5%刻みでズーム調整
 - 複数選択中: 選択中のソースをすべて同じカーソル位置を基準に変更
 - Studio Modeで`Preview`と`Program`が別シーンの場合も，シーンを複製している場合は`Program`に操作が同期されます．
-- 非表示中のソースやグループ内アイテム: 何もしない
+- 非表示中のソースは操作されません（設定から変更可能）
 - ロック中，音声のみのソース，未選択時: 何もしない
 - `Ctrl+Z`で直前のズーム操作を取り消せるようにしています
 
@@ -21,6 +20,10 @@ OBSの「ツール」→「OBS_wheelzoom」から設定できます．
 
 - ズームキー: `Ctrl`，`Shift`，`Alt`，`Meta / Command`，なし
 - 1スクロールあたりの倍率: 1.001倍〜2.000倍
+- PreviewとProgramの同期: デフォルトON
+- ロック中のソースを操作: デフォルトON
+- グループ内の選択項目を操作: デフォルトON
+- 非表示のソースも操作: デフォルトOFF
 
 ## 対応環境
 
@@ -57,7 +60,7 @@ obs-wheelzoom loaded: Ctrl+wheel zooms selected sources around the cursor
 
 ## インストーラー
 
-Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用意しています．Inno Setup 6でコンパイルすると，`dist/OBS_wheelzoom-v0.1.5-setup.exe`が生成されます．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．
+Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用意しています．Inno Setup 6でコンパイルすると，`dist/OBS_wheelzoom-v0.1.6-setup.exe`が生成されます．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．
 
 ## Author & License
 
