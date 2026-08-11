@@ -243,6 +243,10 @@ struct SelectedItems {
 static bool collect_selected_items(obs_scene_t *, obs_sceneitem_t *item, void *param)
 {
 	SelectedItems *selected = static_cast<SelectedItems *>(param);
+	if (!obs_sceneitem_visible(item)) {
+		return true;
+	}
+
 	if (obs_sceneitem_selected(item)) {
 		if (obs_sceneitem_locked(item)) {
 			return true;
@@ -272,7 +276,7 @@ struct MatchingItems {
 static bool collect_matching_source_items(obs_scene_t *, obs_sceneitem_t *item, void *param)
 {
 	MatchingItems *matching = static_cast<MatchingItems *>(param);
-	if (obs_sceneitem_locked(item)) {
+	if (obs_sceneitem_locked(item) || !obs_sceneitem_visible(item)) {
 		return true;
 	}
 
@@ -425,11 +429,16 @@ static bool zoom_selected_items(const CanvasPoint &anchor, double factor)
 	}
 	const std::string undoStates = save_transform_states(snapshots);
 
-	auto process_work = [&](SceneWork &work) {
+		auto process_work = [&](SceneWork &work) {
 		for (obs_sceneitem_t *item : work.selected.items) {
+			if (!obs_sceneitem_visible(item)) {
+				obs_sceneitem_release(item);
+				continue;
+			}
+
 			CanvasPoint itemAnchor = anchor;
 			obs_sceneitem_t *group = obs_sceneitem_get_group(work.scene, item);
-			if (group && obs_sceneitem_locked(group)) {
+			if (group && (obs_sceneitem_locked(group) || !obs_sceneitem_visible(group))) {
 				obs_sceneitem_release(item);
 				continue;
 			}
