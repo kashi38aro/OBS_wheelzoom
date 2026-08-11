@@ -4,25 +4,21 @@ OBS Studioでプレビュー上のソースを選択した状態で，`Ctrl`を�
 
 OBS_wheelzoom is an OBS Studio plugin that zooms the selected source toward the cursor when you hold `Ctrl` and scroll the mouse wheel in the preview．
 
-<p align="center">
-  <a href="https://github.com/user-attachments/assets/4e22e1f0-b40e-4a88-aa27-14954fdc9557">
-    <img src="./demo/OBS_wheelzoom_demo.gif" alt="OBS_wheelzoom demo">
-  </a>
-</p>
+
+https://github.com/user-attachments/assets/17eb4ad6-46dd-4409-8ae8-9c0e8f2a2d25
 
 <p align="center">
   demonstration. 動画内のウェブページは <a href="https://caind.live/">https://caind.live/</a>．
 </p>
 
-- 複数選択中: 選択中のソースをすべて同じカーソル位置を基準に変更
+- 複数のソースを選択中の場合は、選択中のソースをすべて同じカーソル位置を基準にズームされます．
 - Studio Modeで`Preview`と`Program`が別シーンの場合も，シーンを複製している場合は`Program`に操作が同期されます．
-- 非表示中のソースは操作されません（設定から変更可能）
-- ロック中，音声のみのソース，未選択時: 何もしない
-- `Ctrl+Z`で直前のズーム操作を取り消せるようにしています
+- 非表示中のソースは操作されません．（設定で変更可能）
+- `Ctrl+Z`で直前のズーム操作を取り消すことができます．
 
 ## 設定
 
-OBSの「ツール」→「OBS_wheelzoom」から各種設定できます．デフォルト設定は以下の通り
+OBSの「ツール」→「OBS_wheelzoom」から各種設定できます．デフォルト設定は以下の通りです．
 
 - ズームキー: `Ctrl`
 - 1スクロールあたりの倍率: 1.05倍
