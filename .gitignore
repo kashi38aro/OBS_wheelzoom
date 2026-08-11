@@ -1,0 +1,9 @@
+/build/
+/config/
+/.tools/
+/.vs/
+/.idea/
+*.user
+*.suo
+*.vcxproj
+*.vcxproj.filters
