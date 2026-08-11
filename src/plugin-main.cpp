@@ -132,7 +132,7 @@ class PluginSettingsDialog final : public QDialog {
 public:
 	explicit PluginSettingsDialog(QWidget *parent) : QDialog(parent)
 	{
-		setWindowTitle(QStringLiteral("OBS_wheelzoom Settings"));
+		setWindowTitle(QStringLiteral("OBS_wheelzoom"));
 		setModal(true);
 
 		QFormLayout *layout = new QFormLayout(this);
@@ -804,7 +804,7 @@ bool obs_module_load(void)
 		return false;
 	}
 
-	settingsAction = static_cast<QAction *>(obs_frontend_add_tools_menu_qaction("OBS_wheelzoom Settings"));
+	settingsAction = static_cast<QAction *>(obs_frontend_add_tools_menu_qaction("OBS_wheelzoom"));
 	if (settingsAction) {
 		QObject::connect(settingsAction, &QAction::triggered, qApp, []() { open_settings_dialog(); });
 	}
