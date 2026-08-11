@@ -42,7 +42,6 @@ struct ZoomState {
 	uint32_t sourceHeight = 0;
 	float minimumScaleX = kMinimumScale;
 	float minimumScaleY = kMinimumScale;
-	uint32_t boundsAlignment = OBS_ALIGN_CENTER;
 };
 
 std::unordered_map<obs_sceneitem_t *, ZoomState> zoomStates;
@@ -172,31 +171,11 @@ static bool configure_fixed_frame(obs_sceneitem_t *item, ZoomState &state)
 		return false;
 	}
 
-	const uint32_t baseWidth = cropped_dimension(state.sourceWidth, state.baseCrop.left, state.baseCrop.right);
-	const uint32_t baseHeight = cropped_dimension(state.sourceHeight, state.baseCrop.top, state.baseCrop.bottom);
-	state.minimumScaleX = std::max(kMinimumScale, state.frameSize.x / float(baseWidth));
-	state.minimumScaleY = std::max(kMinimumScale, state.frameSize.y / float(baseHeight));
-	state.boundsAlignment = obs_sceneitem_get_bounds_alignment(item);
-
-	obs_transform_info info = {};
-	obs_sceneitem_get_info2(item, &info);
-	info.bounds = state.frameSize;
-	info.bounds_type = OBS_BOUNDS_SCALE_OUTER;
-	info.bounds_alignment = state.boundsAlignment;
-	info.crop_to_bounds = true;
-	obs_sceneitem_set_info2(item, &info);
+	vec2 baseScale;
+	obs_sceneitem_get_scale(item, &baseScale);
+	state.minimumScaleX = std::max(kMinimumScale, std::abs(baseScale.x));
+	state.minimumScaleY = std::max(kMinimumScale, std::abs(baseScale.y));
 	return true;
-}
-
-static void restore_fixed_frame(obs_sceneitem_t *item, const ZoomState &state)
-{
-	obs_transform_info info = {};
-	obs_sceneitem_get_info2(item, &info);
-	info.bounds = state.frameSize;
-	info.bounds_type = OBS_BOUNDS_SCALE_OUTER;
-	info.bounds_alignment = state.boundsAlignment;
-	info.crop_to_bounds = true;
-	obs_sceneitem_set_info2(item, &info);
 }
 
 static bool frame_anchor_ratio(obs_sceneitem_t *item, const CanvasPoint &itemSpaceAnchor, const ZoomState &state,
@@ -464,8 +443,6 @@ static bool zoom_selected_items(const CanvasPoint &anchor, double factor)
 					continue;
 				}
 				stateIt = zoomStates.emplace(item, state).first;
-			} else {
-				restore_fixed_frame(item, stateIt->second);
 			}
 
 			const ZoomState &state = stateIt->second;
