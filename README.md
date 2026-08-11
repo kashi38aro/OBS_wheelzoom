@@ -75,8 +75,6 @@ Get-FileHash .\OBS_wheelzoom-v0.1.6-setup.exe -Algorithm SHA256
 ## Author & License
 
 - Author/Maintainer: `kashi38aro`
-- License: GNU GPL v2.0 or later．
+- License: GNU GPL v2.0 or later（[LICENSE](https://github.com/kashi38aro/OBS_wheelzoom/blob/master/LICENSE)）．
 - Development involved the use of an AI agent．
 - Independent third-party plugin for OBS Studio．
-
-License text: [LICENSE](https://github.com/kashi38aro/OBS_wheelzoom/blob/master/LICENSE)．
