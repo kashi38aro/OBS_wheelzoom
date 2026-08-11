@@ -1,5 +1,5 @@
 /*
- * OBS_scrollzoom
+ * OBS_wheelzoom
  * Copyright (C) 2026 kashi38aro
  *
  * This program is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@
 #include <vector>
 
 OBS_DECLARE_MODULE()
-OBS_MODULE_USE_DEFAULT_LOCALE("obs-zoom-scroll", "en-US")
+OBS_MODULE_USE_DEFAULT_LOCALE("obs-wheelzoom", "en-US")
 
 namespace {
 
@@ -46,10 +46,12 @@ constexpr double kZoomPerWheelStep = 1.05;
 constexpr double kMinimumZoom = 1.0;
 constexpr double kMaximumZoom = 100.0;
 constexpr double kPreviewEdgePixels = 10.0;
-constexpr char kZoomFilterId[] = "obs_zoom_scroll_filter";
-constexpr char kZoomFilterName[] = "OBS_scrollzoom";
-constexpr char kLegacyZoomFilterName[] = "OBS Zoom Scroll";
-constexpr char kZoomFilterDisplayName[] = "OBS_scrollzoom";
+constexpr char kZoomFilterId[] = "obs_wheelzoom_filter";
+constexpr char kLegacyZoomFilterId[] = "obs_zoom_scroll_filter";
+constexpr char kZoomFilterName[] = "OBS_wheelzoom";
+constexpr char kLegacyZoomFilterName[] = "OBS_scrollzoom";
+constexpr char kOlderLegacyZoomFilterName[] = "OBS Zoom Scroll";
+constexpr char kZoomFilterDisplayName[] = "OBS_wheelzoom";
 constexpr int kZoomStateVersion = 2;
 
 struct CanvasPoint {
@@ -199,7 +201,7 @@ static void *zoom_filter_create(obs_data_t *settings, obs_source_t *context)
 	ZoomFilterData *filter = new ZoomFilterData;
 	filter->context = context;
 
-	char *effectPath = obs_module_file("zoom_scroll.effect");
+	char *effectPath = obs_module_file("wheelzoom.effect");
 	char *effectError = nullptr;
 	gs_sampler_info samplerInfo = {};
 	samplerInfo.filter = GS_FILTER_LINEAR;
@@ -211,18 +213,18 @@ static void *zoom_filter_create(obs_data_t *settings, obs_source_t *context)
 	filter->sampler = gs_samplerstate_create(&samplerInfo);
 	obs_leave_graphics();
 	if (effectError) {
-		blog(LOG_ERROR, "obs-zoom-scroll: effect compile error: %s", effectError);
+		blog(LOG_ERROR, "obs-wheelzoom: effect compile error: %s", effectError);
 		bfree(effectError);
 	}
 	if (!effectPath) {
-		blog(LOG_ERROR, "obs-zoom-scroll: effect path is unavailable");
+		blog(LOG_ERROR, "obs-wheelzoom: effect path is unavailable");
 	} else {
-		blog(LOG_DEBUG, "obs-zoom-scroll: loading effect: %s", effectPath);
+		blog(LOG_DEBUG, "obs-wheelzoom: loading effect: %s", effectPath);
 	}
 	bfree(effectPath);
 
 	if (!filter->effect || !filter->sampler) {
-		blog(LOG_ERROR, "obs-zoom-scroll: failed to create filter resources (effect=%p, sampler=%p)",
+		blog(LOG_ERROR, "obs-wheelzoom: failed to create filter resources (effect=%p, sampler=%p)",
 		     filter->effect, filter->sampler);
 		obs_enter_graphics();
 		gs_effect_destroy(filter->effect);
@@ -297,6 +299,7 @@ static obs_properties_t *zoom_filter_properties(void *)
 }
 
 static obs_source_info zoom_filter_info = {};
+static obs_source_info legacy_zoom_filter_info = {};
 
 static void initialize_zoom_filter_info()
 {
@@ -312,6 +315,8 @@ static void initialize_zoom_filter_info()
 	zoom_filter_info.video_render = zoom_filter_render;
 	zoom_filter_info.get_width = zoom_filter_width;
 	zoom_filter_info.get_height = zoom_filter_height;
+	legacy_zoom_filter_info = zoom_filter_info;
+	legacy_zoom_filter_info.id = kLegacyZoomFilterId;
 }
 
 static obs_source_t *get_or_create_zoom_filter(obs_source_t *source)
@@ -323,6 +328,11 @@ static obs_source_t *get_or_create_zoom_filter(obs_source_t *source)
 
 	/* Keep using filters created by versions before the display-name change. */
 	filter = obs_source_get_filter_by_name(source, kLegacyZoomFilterName);
+	if (filter) {
+		return filter;
+	}
+
+	filter = obs_source_get_filter_by_name(source, kOlderLegacyZoomFilterName);
 	if (filter) {
 		return filter;
 	}
@@ -672,16 +682,17 @@ bool obs_module_load(void)
 {
 	initialize_zoom_filter_info();
 	obs_register_source(&zoom_filter_info);
+	obs_register_source(&legacy_zoom_filter_info);
 
 	QWidget *window = main_window();
 	if (!window || !qApp) {
-		blog(LOG_WARNING, "obs-zoom-scroll: OBS main window or Qt application is unavailable");
+		blog(LOG_WARNING, "obs-wheelzoom: OBS main window or Qt application is unavailable");
 		return false;
 	}
 
 	filter = new ZoomScrollFilter(nullptr);
 	qApp->installEventFilter(filter);
-	blog(LOG_INFO, "obs-zoom-scroll loaded: Ctrl+wheel applies content zoom to selected sources");
+	blog(LOG_INFO, "obs-wheelzoom loaded: Ctrl+wheel applies content zoom to selected sources");
 	return true;
 }
 
@@ -692,5 +703,5 @@ void obs_module_unload(void)
 		delete filter;
 		filter = nullptr;
 	}
-	blog(LOG_INFO, "obs-zoom-scroll unloaded");
+	blog(LOG_INFO, "obs-wheelzoom unloaded");
 }

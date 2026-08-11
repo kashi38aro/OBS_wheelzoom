@@ -1,6 +1,8 @@
-# OBS_scrollzoom
+# OBS_wheelzoom
 
 OBS Studioでプレビュー上のソースを選択した状態で，`Ctrl`を押しながらマウスホイールを回すと，カーソル位置を基準に選択中の映像ソースをズームするOBS Studio用プラグインです．
+
+OBS_wheelzoom is an OBS Studio plugin that zooms the selected source toward the cursor when you hold `Ctrl` and scroll the mouse wheel in the preview．
 
 - ホイール上: ズームイン
 - ホイール下: ズームアウト
@@ -16,7 +18,7 @@ OBS Studioでプレビュー上のソースを選択した状態で，`Ctrl`を�
 ## 対応環境
 
 - OBS Studio 29.1以降（Qt 6，OBS frontend APIを使用）
-- Windows x64: v0.1.2インストーラーを提供し，Windowsでビルド・動作確認済み
+- Windows x64: v0.1.3インストーラーを提供し，Windowsでビルド・動作確認済み
 - macOS / Linux: ソースコードは移植可能な構成ですが，動作未検証です．
 
 ## ビルド
@@ -33,32 +35,32 @@ cmake --install build --config Release --prefix "C:\path\to\obs-install"
 
 ## 手動インストール
 
-ビルド後に生成された`obs-zoom-scroll`のモジュールを，OBSのプラグインフォルダへ配置します．Windowsの一般的な構成では，次の場所です．
+ビルド後に生成された`obs-wheelzoom`のモジュールを，OBSのプラグインフォルダへ配置します．Windowsの一般的な構成では，次の場所です．
 
 ```text
-<OBS>\\obs-plugins\\64bit\\obs-zoom-scroll.dll
-<OBS>\\data\\obs-plugins\\obs-zoom-scroll\\locale\\en-US.ini
+<OBS>\\obs-plugins\\64bit\\obs-wheelzoom.dll
+<OBS>\\data\\obs-plugins\\obs-wheelzoom\\locale\\en-US.ini
 ```
 
 配置後にOBS Studioを再起動してください．動作確認はOBSのログに次のメッセージが出ることでも確認できます．
 
 ```text
-obs-zoom-scroll loaded: Ctrl+wheel zooms selected sources around the cursor
+obs-wheelzoom loaded: Ctrl+wheel zooms selected sources around the cursor
 ```
 
 ## インストーラー
 
-Windows向けのInno Setupスクリプトを`installer/obs-zoom-scroll.iss`に用意しています．Inno Setup 6でコンパイルすると，`dist/OBS_scrollzoom-v0.1.2-setup.exe`が生成されます．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．
+Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用意しています．Inno Setup 6でコンパイルすると，`dist/OBS_wheelzoom-v0.1.3-setup.exe`が生成されます．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．
 
 ## 備考
 
-既存ユーザーとの互換性維持のため，内部プラグインID・DLL名・データフォルダ名には従来の`obs-zoom-scroll`を使用しています．正式な表示名は`OBS_scrollzoom`です．
+旧バージョンのフィルター名は既存シーンとの互換性のため内部で認識しますが，新規の表示名・DLL名・データフォルダ名は`OBS_wheelzoom`に統一しています．
 
 ### Author & License
 
 - Author/Maintainer: `kashi38aro`
-- License: GNU GPL v2.0 or later
+- License: GNU GPL v2.0 or later．
 - Created by an AI agent．
 - Independent third-party plugin for OBS Studio．
 
-ライセンス本文は[LICENSE](https://github.com/kashi38aro/OBS_zoomscroll/blob/master/LICENSE)，制作者情報は[AUTHORS.md](https://github.com/kashi38aro/OBS_zoomscroll/blob/master/AUTHORS.md)，第三者コンポーネントの案内は[THIRD_PARTY_NOTICES.md](https://github.com/kashi38aro/OBS_zoomscroll/blob/master/THIRD_PARTY_NOTICES.md)を参照してください．
+License text: [LICENSE](https://github.com/kashi38aro/OBS_zoomscroll/blob/master/LICENSE)． Author information: [AUTHORS.md](https://github.com/kashi38aro/OBS_zoomscroll/blob/master/AUTHORS.md)． Third-party notices: [THIRD_PARTY_NOTICES.md](https://github.com/kashi38aro/OBS_zoomscroll/blob/master/THIRD_PARTY_NOTICES.md)．

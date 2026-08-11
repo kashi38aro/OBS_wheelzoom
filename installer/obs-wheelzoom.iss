@@ -1,6 +1,6 @@
-#define MyAppName "OBS_scrollzoom"
-#define MyAppVersion "0.1.2"
-#define MyAppPublisher "OBS_scrollzoom"
+#define MyAppName "OBS_wheelzoom"
+#define MyAppVersion "0.1.3"
+#define MyAppPublisher "OBS_wheelzoom"
 #define MyAppExeName "obs64.exe"
 
 [Setup]
@@ -15,16 +15,20 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=OBS_scrollzoom-v{#MyAppVersion}-setup
+OutputBaseFilename=OBS_wheelzoom-v{#MyAppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayName={#MyAppName}
 
+[InstallDelete]
+Type: files; Name: "{app}\obs-plugins\64bit\obs-zoom-scroll.dll"
+Type: filesandordirs; Name: "{app}\data\obs-plugins\obs-zoom-scroll"
+
 [Files]
-Source: "..\build\Release\obs-zoom-scroll.dll"; DestDir: "{app}\obs-plugins\64bit"; Flags: ignoreversion restartreplace
-Source: "..\data\zoom_scroll.effect"; DestDir: "{app}\data\obs-plugins\obs-zoom-scroll"; Flags: ignoreversion
-Source: "..\data\locale\en-US.ini"; DestDir: "{app}\data\obs-plugins\obs-zoom-scroll\locale"; Flags: ignoreversion
+Source: "..\build\Release\obs-wheelzoom.dll"; DestDir: "{app}\obs-plugins\64bit"; Flags: ignoreversion restartreplace
+Source: "..\data\wheelzoom.effect"; DestDir: "{app}\data\obs-plugins\obs-wheelzoom"; Flags: ignoreversion
+Source: "..\data\locale\en-US.ini"; DestDir: "{app}\data\obs-plugins\obs-wheelzoom\locale"; Flags: ignoreversion
 
 [Code]
 function GetOBSDir(Param: String): String;
