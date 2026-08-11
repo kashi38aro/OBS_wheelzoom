@@ -23,12 +23,18 @@
 #include <graphics/vec2.h>
 
 #include <QApplication>
+#include <QAction>
 #include <QComboBox>
 #include <QCursor>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QEvent>
+#include <QFormLayout>
 #include <QLabel>
 #include <QRegularExpression>
 #include <QScrollBar>
+#include <QSettings>
 #include <QWheelEvent>
 #include <QWidget>
 
@@ -42,7 +48,9 @@ OBS_MODULE_USE_DEFAULT_LOCALE("obs-wheelzoom", "en-US")
 
 namespace {
 
-constexpr double kZoomPerWheelStep = 1.05;
+constexpr double kDefaultZoomPerWheelStep = 1.05;
+constexpr double kMinimumZoomPerWheelStep = 1.001;
+constexpr double kMaximumZoomPerWheelStep = 2.0;
 constexpr double kMinimumZoom = 1.0;
 constexpr double kMaximumZoom = 100.0;
 constexpr double kPreviewEdgePixels = 10.0;
@@ -75,9 +83,113 @@ struct ZoomFilterData {
 	ZoomFilterState state;
 };
 
+struct PluginSettings {
+	int modifier = int(Qt::ControlModifier);
+	double zoomPerWheelStep = kDefaultZoomPerWheelStep;
+};
+
+PluginSettings pluginSettings;
+QAction *settingsAction = nullptr;
+
 static QWidget *main_window()
 {
 	return static_cast<QWidget *>(obs_frontend_get_main_window());
+}
+
+static QSettings settings_store()
+{
+	return QSettings(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("OBS_wheelzoom"),
+				QStringLiteral("OBS_wheelzoom"));
+}
+
+static bool is_supported_modifier(int modifier)
+{
+	return modifier == int(Qt::NoModifier) || modifier == int(Qt::ControlModifier) ||
+	       modifier == int(Qt::ShiftModifier) || modifier == int(Qt::AltModifier) ||
+	       modifier == int(Qt::MetaModifier);
+}
+
+static void load_plugin_settings()
+{
+	QSettings settings = settings_store();
+	const int savedModifier = settings.value(QStringLiteral("modifier"), int(Qt::ControlModifier)).toInt();
+	pluginSettings.modifier = is_supported_modifier(savedModifier) ? savedModifier : int(Qt::ControlModifier);
+
+	const double savedStep = settings.value(QStringLiteral("zoom_per_wheel_step"), kDefaultZoomPerWheelStep).toDouble();
+	pluginSettings.zoomPerWheelStep =
+		std::clamp(savedStep, kMinimumZoomPerWheelStep, kMaximumZoomPerWheelStep);
+}
+
+static void save_plugin_settings()
+{
+	QSettings settings = settings_store();
+	settings.setValue(QStringLiteral("modifier"), pluginSettings.modifier);
+	settings.setValue(QStringLiteral("zoom_per_wheel_step"), pluginSettings.zoomPerWheelStep);
+	settings.sync();
+}
+
+class PluginSettingsDialog final : public QDialog {
+public:
+	explicit PluginSettingsDialog(QWidget *parent) : QDialog(parent)
+	{
+		setWindowTitle(QStringLiteral("OBS_wheelzoom Settings"));
+		setModal(true);
+
+		QFormLayout *layout = new QFormLayout(this);
+		modifierCombo = new QComboBox(this);
+		modifierCombo->addItem(QStringLiteral("Ctrl"), int(Qt::ControlModifier));
+		modifierCombo->addItem(QStringLiteral("Shift"), int(Qt::ShiftModifier));
+		modifierCombo->addItem(QStringLiteral("Alt"), int(Qt::AltModifier));
+		modifierCombo->addItem(QStringLiteral("Meta / Command"), int(Qt::MetaModifier));
+		modifierCombo->addItem(QStringLiteral("なし"), int(Qt::NoModifier));
+		for (int index = 0; index < modifierCombo->count(); ++index) {
+			if (modifierCombo->itemData(index).toInt() == pluginSettings.modifier) {
+				modifierCombo->setCurrentIndex(index);
+				break;
+			}
+		}
+
+		zoomStepSpin = new QDoubleSpinBox(this);
+		zoomStepSpin->setRange(kMinimumZoomPerWheelStep, kMaximumZoomPerWheelStep);
+		zoomStepSpin->setSingleStep(0.01);
+		zoomStepSpin->setDecimals(3);
+		zoomStepSpin->setValue(pluginSettings.zoomPerWheelStep);
+		zoomStepSpin->setSuffix(QStringLiteral(" x"));
+
+		layout->addRow(QStringLiteral("ズームキー"), modifierCombo);
+		layout->addRow(QStringLiteral("1スクロールあたりの倍率"), zoomStepSpin);
+
+		QDialogButtonBox *buttons =
+			new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+		layout->addRow(buttons);
+		connect(buttons, &QDialogButtonBox::accepted, this, &PluginSettingsDialog::accept);
+		connect(buttons, &QDialogButtonBox::rejected, this, &PluginSettingsDialog::reject);
+		setMinimumWidth(360);
+	}
+
+protected:
+	void accept() override
+	{
+		pluginSettings.modifier = modifierCombo->currentData().toInt();
+		pluginSettings.zoomPerWheelStep = zoomStepSpin->value();
+		save_plugin_settings();
+		QDialog::accept();
+	}
+
+private:
+	QComboBox *modifierCombo = nullptr;
+	QDoubleSpinBox *zoomStepSpin = nullptr;
+};
+
+static void open_settings_dialog()
+{
+	QWidget *window = main_window();
+	if (!window) {
+		return;
+	}
+
+	PluginSettingsDialog dialog(window);
+	dialog.exec();
 }
 
 static QWidget *preview_widget()
@@ -640,7 +752,8 @@ protected:
 		}
 
 		QWheelEvent *wheel = static_cast<QWheelEvent *>(event);
-		if (!(wheel->modifiers() & Qt::ControlModifier)) {
+		if (pluginSettings.modifier != int(Qt::NoModifier) &&
+		    !wheel->modifiers().testFlag(static_cast<Qt::KeyboardModifier>(pluginSettings.modifier))) {
 			return QObject::eventFilter(watched, event);
 		}
 
@@ -664,7 +777,7 @@ protected:
 			return QObject::eventFilter(watched, event);
 		}
 
-		const double factor = std::pow(kZoomPerWheelStep, double(delta) / 120.0);
+		const double factor = std::pow(pluginSettings.zoomPerWheelStep, double(delta) / 120.0);
 		if (zoom_selected_items(anchor, factor)) {
 			event->accept();
 			return true;
@@ -680,6 +793,7 @@ ZoomScrollFilter *filter = nullptr;
 
 bool obs_module_load(void)
 {
+	load_plugin_settings();
 	initialize_zoom_filter_info();
 	obs_register_source(&zoom_filter_info);
 	obs_register_source(&legacy_zoom_filter_info);
@@ -690,6 +804,11 @@ bool obs_module_load(void)
 		return false;
 	}
 
+	settingsAction = static_cast<QAction *>(obs_frontend_add_tools_menu_qaction("OBS_wheelzoom Settings"));
+	if (settingsAction) {
+		QObject::connect(settingsAction, &QAction::triggered, qApp, []() { open_settings_dialog(); });
+	}
+
 	filter = new ZoomScrollFilter(nullptr);
 	qApp->installEventFilter(filter);
 	blog(LOG_INFO, "obs-wheelzoom loaded: Ctrl+wheel applies content zoom to selected sources");
@@ -698,6 +817,11 @@ bool obs_module_load(void)
 
 void obs_module_unload(void)
 {
+	if (settingsAction) {
+		QObject::disconnect(settingsAction, nullptr, nullptr, nullptr);
+		settingsAction = nullptr;
+	}
+
 	if (filter && qApp) {
 		qApp->removeEventFilter(filter);
 		delete filter;

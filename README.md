@@ -15,10 +15,17 @@ OBS_wheelzoom is an OBS Studio plugin that zooms the selected source toward the 
 - ロック中，音声のみのソース，未選択時: 何もしない
 - `Ctrl+Z`で直前のズーム操作を取り消せるようにしています
 
+## 設定
+
+OBSの「ツール」→「OBS_wheelzoom Settings」から設定できます．
+
+- ズームキー: Ctrl，Shift，Alt，Meta / Command，なし
+- 1スクロールあたりの倍率: 1.001倍〜2.000倍
+
 ## 対応環境
 
 - OBS Studio 29.1以降（Qt 6，OBS frontend APIを使用）
-- Windows x64: v0.1.3インストーラーを提供し，Windowsでビルド・動作確認済み
+- Windows x64: v0.1.4インストーラーを提供し，Windowsでビルド・動作確認済み
 - macOS / Linux: ソースコードは移植可能な構成ですが，動作未検証です．
 
 ## ビルド
@@ -50,7 +57,7 @@ obs-wheelzoom loaded: Ctrl+wheel zooms selected sources around the cursor
 
 ## インストーラー
 
-Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用意しています．Inno Setup 6でコンパイルすると，`dist/OBS_wheelzoom-v0.1.3-setup.exe`が生成されます．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．
+Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用意しています．Inno Setup 6でコンパイルすると，`dist/OBS_wheelzoom-v0.1.4-setup.exe`が生成されます．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．
 
 ## 備考
 
@@ -63,4 +70,4 @@ Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用�
 - Created by an AI agent．
 - Independent third-party plugin for OBS Studio．
 
-License text: [LICENSE](https://github.com/kashi38aro/OBS_zoomscroll/blob/master/LICENSE)． Author information: [AUTHORS.md](https://github.com/kashi38aro/OBS_zoomscroll/blob/master/AUTHORS.md)． Third-party notices: [THIRD_PARTY_NOTICES.md](https://github.com/kashi38aro/OBS_zoomscroll/blob/master/THIRD_PARTY_NOTICES.md)．
+License text: [LICENSE](https://github.com/kashi38aro/OBS_wheelzoom/blob/master/LICENSE)． Author information: [AUTHORS.md](https://github.com/kashi38aro/OBS_wheelzoom/blob/master/AUTHORS.md)． Third-party notices: [THIRD_PARTY_NOTICES.md](https://github.com/kashi38aro/OBS_wheelzoom/blob/master/THIRD_PARTY_NOTICES.md)．
