@@ -36,7 +36,7 @@ cmake --install build --config Release --prefix "C:\path\to\obs-install"
 
 ```text
 <OBS>\\obs-plugins\\64bit\\obs-zoom-scroll.dll
-<OBS>\\data\\obs-zoom-scroll\\locale\\en-US.ini
+<OBS>\\data\\obs-plugins\\obs-zoom-scroll\\locale\\en-US.ini
 ```
 
 配置後にOBS Studioを再起動してください。動作確認はOBSのログに次のメッセージが出ることでも確認できます。
@@ -44,6 +44,10 @@ cmake --install build --config Release --prefix "C:\path\to\obs-install"
 ```text
 obs-zoom-scroll loaded: Ctrl+wheel zooms selected sources around the cursor
 ```
+
+## インストーラー
+
+Windows向けのInno Setupスクリプトを`installer/obs-zoom-scroll.iss`に用意しています。Inno Setup 6でコンパイルすると、`dist/obs-zoom-scroll-v0.1.0-setup.exe`が生成されます。インストーラーはOBS Studioのインストール先を選択し、DLLとシェーダーを正しいプラグインフォルダへ配置します。
 
 ## 実装上の注意
 

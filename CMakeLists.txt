@@ -49,5 +49,5 @@ install(TARGETS ${PROJECT_NAME}
 )
 
 install(DIRECTORY data/
-  DESTINATION "data/obs-zoom-scroll"
+  DESTINATION "data/obs-plugins/obs-zoom-scroll"
 )

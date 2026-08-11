@@ -31,6 +31,7 @@ constexpr double kMaximumZoom = 100.0;
 constexpr double kPreviewEdgePixels = 10.0;
 constexpr char kZoomFilterId[] = "obs_zoom_scroll_filter";
 constexpr char kZoomFilterName[] = "OBS Zoom Scroll";
+constexpr int kZoomStateVersion = 2;
 
 struct CanvasPoint {
 	double x = 0.0;
@@ -141,8 +142,8 @@ static double clamp_zoom(double zoom)
 
 static double clamp_offset(double offset, double zoom)
 {
-	const double minimumOffset = 1.0 - 1.0 / zoom;
-	return std::clamp(offset, minimumOffset, 0.0);
+	const double maximumOffset = 1.0 - 1.0 / zoom;
+	return std::clamp(offset, 0.0, maximumOffset);
 }
 
 static const char *zoom_filter_get_name(void *)
@@ -152,6 +153,7 @@ static const char *zoom_filter_get_name(void *)
 
 static void zoom_filter_defaults(obs_data_t *settings)
 {
+	obs_data_set_default_int(settings, "state_version", kZoomStateVersion);
 	obs_data_set_default_double(settings, "zoom", kMinimumZoom);
 	obs_data_set_default_double(settings, "offset_x", 0.0);
 	obs_data_set_default_double(settings, "offset_y", 0.0);
@@ -160,6 +162,14 @@ static void zoom_filter_defaults(obs_data_t *settings)
 static void zoom_filter_update(void *data, obs_data_t *settings)
 {
 	ZoomFilterData *filter = static_cast<ZoomFilterData *>(data);
+	if (obs_data_get_int(settings, "state_version") < kZoomStateVersion) {
+		/* Older builds used a reversed offset range and could persist a broken
+		 * top-left zoom. Reset that state once when the corrected filter loads. */
+		obs_data_set_int(settings, "state_version", kZoomStateVersion);
+		obs_data_set_double(settings, "zoom", kMinimumZoom);
+		obs_data_set_double(settings, "offset_x", 0.0);
+		obs_data_set_double(settings, "offset_y", 0.0);
+	}
 	filter->state.zoom = clamp_zoom(obs_data_get_double(settings, "zoom"));
 	filter->state.offsetX = clamp_offset(obs_data_get_double(settings, "offset_x"), filter->state.zoom);
 	filter->state.offsetY = clamp_offset(obs_data_get_double(settings, "offset_y"), filter->state.zoom);
@@ -171,15 +181,25 @@ static void *zoom_filter_create(obs_data_t *settings, obs_source_t *context)
 	filter->context = context;
 
 	char *effectPath = obs_module_file("zoom_scroll.effect");
+	char *effectError = nullptr;
 	gs_sampler_info samplerInfo = {};
 	samplerInfo.filter = GS_FILTER_LINEAR;
-	samplerInfo.address_u = GS_ADDRESS_BORDER;
-	samplerInfo.address_v = GS_ADDRESS_BORDER;
+	samplerInfo.address_u = GS_ADDRESS_CLAMP;
+	samplerInfo.address_v = GS_ADDRESS_CLAMP;
 
 	obs_enter_graphics();
-	filter->effect = gs_effect_create_from_file(effectPath, nullptr);
+	filter->effect = gs_effect_create_from_file(effectPath, &effectError);
 	filter->sampler = gs_samplerstate_create(&samplerInfo);
 	obs_leave_graphics();
+	if (effectError) {
+		blog(LOG_ERROR, "obs-zoom-scroll: effect compile error: %s", effectError);
+		bfree(effectError);
+	}
+	if (!effectPath) {
+		blog(LOG_ERROR, "obs-zoom-scroll: effect path is unavailable");
+	} else {
+		blog(LOG_DEBUG, "obs-zoom-scroll: loading effect: %s", effectPath);
+	}
 	bfree(effectPath);
 
 	if (!filter->effect || !filter->sampler) {
@@ -283,6 +303,7 @@ static obs_source_t *get_or_create_zoom_filter(obs_source_t *source)
 	}
 
 	obs_data_t *settings = obs_data_create();
+	obs_data_set_int(settings, "state_version", kZoomStateVersion);
 	obs_data_set_double(settings, "zoom", kMinimumZoom);
 	obs_data_set_double(settings, "offset_x", 0.0);
 	obs_data_set_double(settings, "offset_y", 0.0);
@@ -321,6 +342,7 @@ static bool set_zoom_filter_state(obs_source_t *source, const ZoomFilterState &s
 	}
 
 	obs_data_t *settings = obs_data_create();
+	obs_data_set_int(settings, "state_version", kZoomStateVersion);
 	obs_data_set_double(settings, "zoom", clamp_zoom(state.zoom));
 	obs_data_set_double(settings, "offset_x", clamp_offset(state.offsetX, state.zoom));
 	obs_data_set_double(settings, "offset_y", clamp_offset(state.offsetY, state.zoom));
