@@ -183,6 +183,8 @@ static void *zoom_filter_create(obs_data_t *settings, obs_source_t *context)
 	bfree(effectPath);
 
 	if (!filter->effect || !filter->sampler) {
+		blog(LOG_ERROR, "obs-zoom-scroll: failed to create filter resources (effect=%p, sampler=%p)",
+		     filter->effect, filter->sampler);
 		obs_enter_graphics();
 		gs_effect_destroy(filter->effect);
 		gs_samplerstate_destroy(filter->sampler);
@@ -191,7 +193,7 @@ static void *zoom_filter_create(obs_data_t *settings, obs_source_t *context)
 		return nullptr;
 	}
 
-	filter->param_offset = gs_effect_get_param_by_name(filter->effect, "offset");
+	filter->param_offset = gs_effect_get_param_by_name(filter->effect, "uv_offset");
 	filter->param_zoom = gs_effect_get_param_by_name(filter->effect, "zoom");
 	filter->param_image = gs_effect_get_param_by_name(filter->effect, "image");
 	zoom_filter_update(filter, settings);

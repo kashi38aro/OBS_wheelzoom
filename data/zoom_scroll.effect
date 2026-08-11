@@ -1,13 +1,12 @@
 uniform float4x4 ViewProj;
 uniform texture2d image;
-uniform float2 offset;
+uniform float2 uv_offset;
 uniform float zoom;
 
 sampler_state textureSampler {
 	Filter    = Linear;
-	AddressU  = Border;
-	AddressV  = Border;
-	BorderColor = 00000000;
+	AddressU  = Clamp;
+	AddressV  = Clamp;
 };
 
 struct VertData {
@@ -25,7 +24,7 @@ VertData VSCursorZoom(VertData v_in)
 
 float4 PSCursorZoom(VertData v_in) : TARGET
 {
-	float2 source_uv = v_in.uv / zoom + offset;
+	float2 source_uv = v_in.uv / zoom + uv_offset;
 	return image.Sample(textureSampler, source_uv);
 }
 
