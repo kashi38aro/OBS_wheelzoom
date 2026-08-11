@@ -1,11 +1,11 @@
 # OBS_scrollzoom
 
-## 制作者・ライセンス
+## Author & License
 
-- 制作者・メンテナ: `kashi38aro`
-- ライセンス: [GNU GPL v2.0 or later](LICENSE)
-- 本プロジェクトは、設計・実装・デバッグ・ビルド・リリース作業にOpenAI Codexを用いたAI支援開発で制作しました。最終的な仕様決定、動作確認、公開判断は制作者が行っています。
-- OBS Studio公式とは独立した第三者プラグインです。
+- Author/Maintainer: `kashi38aro`
+- License: [GNU GPL v2.0 or later](LICENSE)
+- Development assistance: OpenAI Codex.
+- Independent third-party plugin for OBS Studio.
 
 OBS Studioでプレビュー上のソースを選択した状態で、`Ctrl`を押しながらマウスホイールを回すと、カーソル位置を基準に選択中の映像ソースをズームします。
 
