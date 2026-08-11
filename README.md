@@ -62,9 +62,9 @@ obs-wheelzoom loaded: Ctrl+wheel zooms selected sources around the cursor
 
 ## インストーラー
 
-Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用意しています．Inno Setup 6でコンパイルすると，`dist/OBS_wheelzoom-v0.1.6-setup.exe`が生成されます．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．`Program Files`へ書き込むため，実行時に管理者権限が必要です．
+Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用意しています．Releaseにはインストーラーと，手動展開用のZIPパッケージを用意しています．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．`Program Files`へ書き込むため，実行時に管理者権限が必要です．
 
-ReleaseにはインストーラーのSHA256チェックサムを添付しています．ダウンロード後は，次のコマンドでチェックサムを確認できます．
+ZIPパッケージを使う場合は，OBS Studioを終了してから，内容をOBS Studioのインストール先へ展開してください．Release本文のChecksums欄に，ダウンロードファイルのSHA256チェックサムを記載しています．ダウンロード後は，次のコマンドで確認できます．
 
 ```powershell
 Get-FileHash .\OBS_wheelzoom-v0.1.6-setup.exe -Algorithm SHA256
