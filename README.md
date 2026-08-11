@@ -11,7 +11,7 @@ OBS_wheelzoom is an OBS Studio plugin that zooms the selected source toward the 
 </p>
 
 <p align="center">
-  動画内のウェブページは <a href="https://caind.live/">https://caind.live/</a> です．
+  demonstration. 動画内のウェブページは <a href="https://caind.live/">https://caind.live/</a>．
 </p>
 
 - 複数選択中: 選択中のソースをすべて同じカーソル位置を基準に変更
@@ -22,14 +22,14 @@ OBS_wheelzoom is an OBS Studio plugin that zooms the selected source toward the 
 
 ## 設定
 
-OBSの「ツール」→「OBS_wheelzoom」から設定できます．
+OBSの「ツール」→「OBS_wheelzoom」から各種設定できます．デフォルト設定は以下の通り
 
-- ズームキー: `Ctrl`，`Shift`，`Alt`，`Meta / Command`，なし
-- 1スクロールあたりの倍率: 1.001倍〜2.000倍
-- PreviewとProgramの同期: デフォルトON
-- ロック中のソースを操作: デフォルトON
-- グループ内の選択項目を操作: デフォルトON
-- 非表示のソースも操作: デフォルトOFF
+- ズームキー: `Ctrl`
+- 1スクロールあたりの倍率: 1.05倍
+- PreviewとProgramの同期: ON
+- ロック中のソースを操作: ON
+- グループ内の選択項目を操作: ON
+- 非表示のソースも操作: OFF
 
 ## 対応環境
 
