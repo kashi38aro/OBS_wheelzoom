@@ -188,12 +188,22 @@ public:
 		operateHiddenCheck->setChecked(pluginSettings.operateHidden);
 		layout->addRow(operateHiddenCheck);
 
+		QLabel *footer = new QLabel(
+			QStringLiteral("OBS_wheelzoom v1.0 · <a href=\"https://github.com/kashi38aro/OBS_wheelzoom\">GitHub</a> · 2026 · @kashi38aro"),
+			this);
+		footer->setTextFormat(Qt::RichText);
+		footer->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		footer->setOpenExternalLinks(true);
+		footer->setWordWrap(false);
+		footer->setAlignment(Qt::AlignCenter);
+		layout->addRow(footer);
+
 		QDialogButtonBox *buttons =
 			new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
 		layout->addRow(buttons);
 		connect(buttons, &QDialogButtonBox::accepted, this, &PluginSettingsDialog::accept);
 		connect(buttons, &QDialogButtonBox::rejected, this, &PluginSettingsDialog::reject);
-		setMinimumWidth(360);
+		setMinimumWidth(520);
 	}
 
 protected:
