@@ -1,0 +1,39 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float2 offset;
+uniform float zoom;
+
+sampler_state textureSampler {
+	Filter    = Linear;
+	AddressU  = Border;
+	AddressV  = Border;
+	BorderColor = 00000000;
+};
+
+struct VertData {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+VertData VSCursorZoom(VertData v_in)
+{
+	VertData vert_out;
+	vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+	vert_out.uv = v_in.uv;
+	return vert_out;
+}
+
+float4 PSCursorZoom(VertData v_in) : TARGET
+{
+	float2 source_uv = v_in.uv / zoom + offset;
+	return image.Sample(textureSampler, source_uv);
+}
+
+technique Draw
+{
+	pass
+	{
+		vertex_shader = VSCursorZoom(v_in);
+		pixel_shader  = PSCursorZoom(v_in);
+	}
+}

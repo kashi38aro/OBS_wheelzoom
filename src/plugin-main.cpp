@@ -1,8 +1,9 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 
-#include <graphics/vec2.h>
+#include <graphics/graphics.h>
 #include <graphics/matrix4.h>
+#include <graphics/vec2.h>
 
 #include <QApplication>
 #include <QComboBox>
@@ -17,7 +18,6 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 OBS_DECLARE_MODULE()
@@ -26,25 +26,32 @@ OBS_MODULE_USE_DEFAULT_LOCALE("obs-zoom-scroll", "en-US")
 namespace {
 
 constexpr double kZoomPerWheelStep = 1.05;
+constexpr double kMinimumZoom = 1.0;
+constexpr double kMaximumZoom = 100.0;
 constexpr double kPreviewEdgePixels = 10.0;
-constexpr float kMinimumScale = 0.001f;
-constexpr float kMaximumScale = 100.0f;
+constexpr char kZoomFilterId[] = "obs_zoom_scroll_filter";
+constexpr char kZoomFilterName[] = "OBS Zoom Scroll";
 
 struct CanvasPoint {
 	double x = 0.0;
 	double y = 0.0;
 };
 
-struct ZoomState {
-	vec2 frameSize;
-	obs_sceneitem_crop baseCrop = {};
-	uint32_t sourceWidth = 0;
-	uint32_t sourceHeight = 0;
-	float minimumScaleX = kMinimumScale;
-	float minimumScaleY = kMinimumScale;
+struct ZoomFilterState {
+	double zoom = kMinimumZoom;
+	double offsetX = 0.0;
+	double offsetY = 0.0;
 };
 
-std::unordered_map<obs_sceneitem_t *, ZoomState> zoomStates;
+struct ZoomFilterData {
+	obs_source_t *context = nullptr;
+	gs_effect_t *effect = nullptr;
+	gs_eparam_t *param_offset = nullptr;
+	gs_eparam_t *param_zoom = nullptr;
+	gs_eparam_t *param_image = nullptr;
+	gs_samplerstate_t *sampler = nullptr;
+	ZoomFilterState state;
+};
 
 static QWidget *main_window()
 {
@@ -75,12 +82,6 @@ static double scale_from_label(QWidget *window)
 	return ok && percent > 0.0 ? percent / 100.0 : 1.0;
 }
 
-/*
- * Convert a Qt preview-widget coordinate into the OBS base-canvas coordinate
- * used by obs_sceneitem_*().  OBS stores preview offsets and scale in device
- * pixels, while Qt mouse coordinates are in logical pixels, hence the DPR
- * conversion here.
- */
 static bool canvas_point_from_preview(QWidget *preview, const QPoint &previewPoint, CanvasPoint &canvas)
 {
 	obs_video_info videoInfo = {};
@@ -105,7 +106,6 @@ static bool canvas_point_from_preview(QWidget *preview, const QPoint &previewPoi
 	double offsetYPixels = 0.0;
 
 	if (!fixedScaling) {
-		// Match OBSBasic::ResizePreview: fit inside the 10px device-pixel edge.
 		scaleInPixels = std::min(canvasAreaWidthPixels / double(videoInfo.base_width),
 						 canvasAreaHeightPixels / double(videoInfo.base_height));
 		offsetXPixels = kPreviewEdgePixels +
@@ -113,10 +113,7 @@ static bool canvas_point_from_preview(QWidget *preview, const QPoint &previewPoi
 		offsetYPixels = kPreviewEdgePixels +
 				 (canvasAreaHeightPixels - double(videoInfo.base_height) * scaleInPixels) / 2.0;
 	} else {
-		// "Canvas"/"Output" scaling: the percentage is shown by OBS in this label.
-		// OBS stores both the scale and scrollbar offsets in device pixels.
 		scaleInPixels = scale_from_label(main_window());
-
 		QScrollBar *xScrollBar = main_window()->findChild<QScrollBar *>(QStringLiteral("previewXScrollBar"));
 		QScrollBar *yScrollBar = main_window()->findChild<QScrollBar *>(QStringLiteral("previewYScrollBar"));
 		const double scrollX = xScrollBar ? -double(xScrollBar->value()) : 0.0;
@@ -137,50 +134,227 @@ static bool canvas_point_from_preview(QWidget *preview, const QPoint &previewPoi
 	return true;
 }
 
-static float clamp_scale(float value, float minimumScale)
+static double clamp_zoom(double zoom)
 {
-	const float sign = value < 0.0f ? -1.0f : 1.0f;
-	const float magnitude = std::clamp(std::abs(value), minimumScale, std::max(kMaximumScale, minimumScale));
-	return sign * magnitude;
+	return std::clamp(zoom, kMinimumZoom, kMaximumZoom);
 }
 
-static uint32_t cropped_dimension(uint32_t sourceDimension, int cropStart, int cropEnd)
+static double clamp_offset(double offset, double zoom)
 {
-	const int64_t remaining = int64_t(sourceDimension) - int64_t(cropStart) - int64_t(cropEnd);
-	return uint32_t(std::max<int64_t>(1, remaining));
+	const double minimumOffset = 1.0 - 1.0 / zoom;
+	return std::clamp(offset, minimumOffset, 0.0);
 }
 
-static bool configure_fixed_frame(obs_sceneitem_t *item, ZoomState &state)
+static const char *zoom_filter_get_name(void *)
 {
-	obs_source_t *source = obs_sceneitem_get_source(item);
-	if (!source) {
+	return "Cursor Zoom";
+}
+
+static void zoom_filter_defaults(obs_data_t *settings)
+{
+	obs_data_set_default_double(settings, "zoom", kMinimumZoom);
+	obs_data_set_default_double(settings, "offset_x", 0.0);
+	obs_data_set_default_double(settings, "offset_y", 0.0);
+}
+
+static void zoom_filter_update(void *data, obs_data_t *settings)
+{
+	ZoomFilterData *filter = static_cast<ZoomFilterData *>(data);
+	filter->state.zoom = clamp_zoom(obs_data_get_double(settings, "zoom"));
+	filter->state.offsetX = clamp_offset(obs_data_get_double(settings, "offset_x"), filter->state.zoom);
+	filter->state.offsetY = clamp_offset(obs_data_get_double(settings, "offset_y"), filter->state.zoom);
+}
+
+static void *zoom_filter_create(obs_data_t *settings, obs_source_t *context)
+{
+	ZoomFilterData *filter = new ZoomFilterData;
+	filter->context = context;
+
+	char *effectPath = obs_module_file("zoom_scroll.effect");
+	gs_sampler_info samplerInfo = {};
+	samplerInfo.filter = GS_FILTER_LINEAR;
+	samplerInfo.address_u = GS_ADDRESS_BORDER;
+	samplerInfo.address_v = GS_ADDRESS_BORDER;
+
+	obs_enter_graphics();
+	filter->effect = gs_effect_create_from_file(effectPath, nullptr);
+	filter->sampler = gs_samplerstate_create(&samplerInfo);
+	obs_leave_graphics();
+	bfree(effectPath);
+
+	if (!filter->effect || !filter->sampler) {
+		obs_enter_graphics();
+		gs_effect_destroy(filter->effect);
+		gs_samplerstate_destroy(filter->sampler);
+		obs_leave_graphics();
+		delete filter;
+		return nullptr;
+	}
+
+	filter->param_offset = gs_effect_get_param_by_name(filter->effect, "offset");
+	filter->param_zoom = gs_effect_get_param_by_name(filter->effect, "zoom");
+	filter->param_image = gs_effect_get_param_by_name(filter->effect, "image");
+	zoom_filter_update(filter, settings);
+	return filter;
+}
+
+static void zoom_filter_destroy(void *data)
+{
+	ZoomFilterData *filter = static_cast<ZoomFilterData *>(data);
+	obs_enter_graphics();
+	gs_effect_destroy(filter->effect);
+	gs_samplerstate_destroy(filter->sampler);
+	obs_leave_graphics();
+	delete filter;
+}
+
+static void zoom_filter_render(void *data, gs_effect_t *)
+{
+	ZoomFilterData *filter = static_cast<ZoomFilterData *>(data);
+	obs_source_t *target = obs_filter_get_target(filter->context);
+	if (!target || !filter->effect || !filter->sampler) {
+		obs_source_skip_video_filter(filter->context);
+		return;
+	}
+
+	const uint32_t width = obs_source_get_base_width(target);
+	const uint32_t height = obs_source_get_base_height(target);
+	if (width == 0 || height == 0) {
+		obs_source_skip_video_filter(filter->context);
+		return;
+	}
+
+	if (!obs_source_process_filter_begin(filter->context, GS_RGBA, OBS_NO_DIRECT_RENDERING)) {
+		return;
+	}
+
+	vec2 offset;
+	vec2_set(&offset, float(filter->state.offsetX), float(filter->state.offsetY));
+	gs_effect_set_vec2(filter->param_offset, &offset);
+	gs_effect_set_float(filter->param_zoom, float(filter->state.zoom));
+	gs_effect_set_next_sampler(filter->param_image, filter->sampler);
+	obs_source_process_filter_end(filter->context, filter->effect, width, height);
+}
+
+static uint32_t zoom_filter_width(void *data)
+{
+	ZoomFilterData *filter = static_cast<ZoomFilterData *>(data);
+	obs_source_t *target = obs_filter_get_target(filter->context);
+	return target ? obs_source_get_base_width(target) : 0;
+}
+
+static uint32_t zoom_filter_height(void *data)
+{
+	ZoomFilterData *filter = static_cast<ZoomFilterData *>(data);
+	obs_source_t *target = obs_filter_get_target(filter->context);
+	return target ? obs_source_get_base_height(target) : 0;
+}
+
+static obs_properties_t *zoom_filter_properties(void *)
+{
+	return obs_properties_create();
+}
+
+static obs_source_info zoom_filter_info = {};
+
+static void initialize_zoom_filter_info()
+{
+	zoom_filter_info.id = kZoomFilterId;
+	zoom_filter_info.type = OBS_SOURCE_TYPE_FILTER;
+	zoom_filter_info.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_SRGB;
+	zoom_filter_info.get_name = zoom_filter_get_name;
+	zoom_filter_info.create = zoom_filter_create;
+	zoom_filter_info.destroy = zoom_filter_destroy;
+	zoom_filter_info.update = zoom_filter_update;
+	zoom_filter_info.get_defaults = zoom_filter_defaults;
+	zoom_filter_info.get_properties = zoom_filter_properties;
+	zoom_filter_info.video_render = zoom_filter_render;
+	zoom_filter_info.get_width = zoom_filter_width;
+	zoom_filter_info.get_height = zoom_filter_height;
+}
+
+static obs_source_t *get_or_create_zoom_filter(obs_source_t *source)
+{
+	obs_source_t *filter = obs_source_get_filter_by_name(source, kZoomFilterName);
+	if (filter) {
+		return filter;
+	}
+
+	obs_data_t *settings = obs_data_create();
+	obs_data_set_double(settings, "zoom", kMinimumZoom);
+	obs_data_set_double(settings, "offset_x", 0.0);
+	obs_data_set_double(settings, "offset_y", 0.0);
+	obs_source_t *created = obs_source_create_private(kZoomFilterId, kZoomFilterName, settings);
+	obs_data_release(settings);
+	if (!created) {
+		return nullptr;
+	}
+
+	obs_source_filter_add(source, created);
+	obs_source_release(created);
+	return obs_source_get_filter_by_name(source, kZoomFilterName);
+}
+
+static bool get_zoom_filter_state(obs_source_t *source, ZoomFilterState &state)
+{
+	obs_source_t *filter = get_or_create_zoom_filter(source);
+	if (!filter) {
 		return false;
 	}
 
-	state.sourceWidth = obs_source_get_width(source);
-	state.sourceHeight = obs_source_get_height(source);
-	if (state.sourceWidth == 0 || state.sourceHeight == 0) {
-		return false;
-	}
-
-	obs_sceneitem_get_crop(item, &state.baseCrop);
-	obs_sceneitem_get_box_scale(item, &state.frameSize);
-	state.frameSize.x = std::abs(state.frameSize.x);
-	state.frameSize.y = std::abs(state.frameSize.y);
-	if (state.frameSize.x <= 0.0f || state.frameSize.y <= 0.0f) {
-		return false;
-	}
-
-	vec2 baseScale;
-	obs_sceneitem_get_scale(item, &baseScale);
-	state.minimumScaleX = std::max(kMinimumScale, std::abs(baseScale.x));
-	state.minimumScaleY = std::max(kMinimumScale, std::abs(baseScale.y));
+	obs_data_t *settings = obs_source_get_settings(filter);
+	state.zoom = clamp_zoom(obs_data_get_double(settings, "zoom"));
+	state.offsetX = clamp_offset(obs_data_get_double(settings, "offset_x"), state.zoom);
+	state.offsetY = clamp_offset(obs_data_get_double(settings, "offset_y"), state.zoom);
+	obs_data_release(settings);
+	obs_source_release(filter);
 	return true;
 }
 
-static bool frame_anchor_ratio(obs_sceneitem_t *item, const CanvasPoint &itemSpaceAnchor, const ZoomState &state,
-				       double &ratioX, double &ratioY)
+static bool set_zoom_filter_state(obs_source_t *source, const ZoomFilterState &state)
 {
+	obs_source_t *filter = get_or_create_zoom_filter(source);
+	if (!filter) {
+		return false;
+	}
+
+	obs_data_t *settings = obs_data_create();
+	obs_data_set_double(settings, "zoom", clamp_zoom(state.zoom));
+	obs_data_set_double(settings, "offset_x", clamp_offset(state.offsetX, state.zoom));
+	obs_data_set_double(settings, "offset_y", clamp_offset(state.offsetY, state.zoom));
+	obs_source_update(filter, settings);
+	obs_data_release(settings);
+	obs_source_release(filter);
+	return true;
+}
+
+static bool source_uv_from_anchor(obs_scene_t *scene, obs_sceneitem_t *item, const CanvasPoint &anchor, vec2 &uv)
+{
+	obs_source_t *source = obs_sceneitem_get_source(item);
+	const uint32_t sourceWidth = source ? obs_source_get_width(source) : 0;
+	const uint32_t sourceHeight = source ? obs_source_get_height(source) : 0;
+	if (!source || sourceWidth == 0 || sourceHeight == 0) {
+		return false;
+	}
+
+	CanvasPoint itemAnchor = anchor;
+	obs_sceneitem_t *group = obs_sceneitem_get_group(scene, item);
+	if (group) {
+		matrix4 groupTransform;
+		matrix4 inverseGroupTransform;
+		obs_sceneitem_get_draw_transform(group, &groupTransform);
+		if (!matrix4_inv(&inverseGroupTransform, &groupTransform)) {
+			return false;
+		}
+
+		vec3 canvasPoint;
+		vec3 localPoint;
+		vec3_set(&canvasPoint, float(anchor.x), float(anchor.y), 0.0f);
+		vec3_transform(&localPoint, &canvasPoint, &inverseGroupTransform);
+		itemAnchor.x = localPoint.x;
+		itemAnchor.y = localPoint.y;
+	}
+
 	matrix4 boxTransform;
 	matrix4 inverseBoxTransform;
 	obs_sceneitem_get_box_transform(item, &boxTransform);
@@ -189,30 +363,17 @@ static bool frame_anchor_ratio(obs_sceneitem_t *item, const CanvasPoint &itemSpa
 	}
 
 	vec3 canvasPoint;
-	vec3 framePoint;
-	vec3_set(&canvasPoint, float(itemSpaceAnchor.x), float(itemSpaceAnchor.y), 0.0f);
-	vec3_transform(&framePoint, &canvasPoint, &inverseBoxTransform);
+	vec3 boxPoint;
+	vec3_set(&canvasPoint, float(itemAnchor.x), float(itemAnchor.y), 0.0f);
+	vec3_transform(&boxPoint, &canvasPoint, &inverseBoxTransform);
 
-	// box_transform maps the normalized box (0..1) to the scene canvas.
-	// Dividing by frameSize here would collapse almost every cursor position
-	// toward 0, which makes the zoom appear anchored to the top-left corner.
-	ratioX = std::clamp(double(framePoint.x), 0.0, 1.0);
-	ratioY = std::clamp(double(framePoint.y), 0.0, 1.0);
+	obs_sceneitem_crop crop = {};
+	obs_sceneitem_get_crop(item, &crop);
+	const uint32_t visibleWidth = uint32_t(std::max<int64_t>(1, int64_t(sourceWidth) - crop.left - crop.right));
+	const uint32_t visibleHeight = uint32_t(std::max<int64_t>(1, int64_t(sourceHeight) - crop.top - crop.bottom));
+	uv.x = float(std::clamp((double(crop.left) + double(boxPoint.x) * visibleWidth) / sourceWidth, 0.0, 1.0));
+	uv.y = float(std::clamp((double(crop.top) + double(boxPoint.y) * visibleHeight) / sourceHeight, 0.0, 1.0));
 	return true;
-}
-
-static int crop_left_for_anchor(double sourcePoint, double ratio, uint32_t visibleSize, uint32_t sourceSize)
-{
-	const int maxCrop = std::max(0, int(sourceSize - visibleSize));
-	const int requested = int(std::lround(sourcePoint - ratio * double(visibleSize)));
-	return std::clamp(requested, 0, maxCrop);
-}
-
-static uint32_t visible_dimension_for_frame(float frameDimension, float scale, uint32_t sourceDimension)
-{
-	const double absoluteScale = std::max(std::abs(double(scale)), double(kMinimumScale));
-	const int requested = int(std::lround(double(frameDimension) / absoluteScale));
-	return uint32_t(std::clamp(requested, 1, int(sourceDimension)));
 }
 
 struct SelectedItems {
@@ -247,78 +408,6 @@ static bool collect_selected_items(obs_scene_t *, obs_sceneitem_t *item, void *p
 	return true;
 }
 
-struct MatchingItems {
-	const std::vector<std::string> *sourceUuids = nullptr;
-	SelectedItems *selected = nullptr;
-};
-
-static bool collect_matching_source_items(obs_scene_t *, obs_sceneitem_t *item, void *param)
-{
-	MatchingItems *matching = static_cast<MatchingItems *>(param);
-	if (obs_sceneitem_locked(item) || !obs_sceneitem_visible(item)) {
-		return true;
-	}
-
-	obs_source_t *source = obs_sceneitem_get_source(item);
-	const char *uuid = source ? obs_source_get_uuid(source) : nullptr;
-	const bool matches = uuid && std::find(matching->sourceUuids->begin(), matching->sourceUuids->end(), uuid) !=
-						matching->sourceUuids->end();
-	if (matches && (obs_source_get_output_flags(source) & OBS_SOURCE_VIDEO)) {
-		obs_sceneitem_addref(item);
-		matching->selected->items.push_back(item);
-		return true;
-	}
-
-	if (obs_sceneitem_is_group(item)) {
-		obs_sceneitem_group_enum_items(item, collect_matching_source_items, param);
-	}
-	return true;
-}
-
-struct SceneSnapshot {
-	obs_scene_t *scene = nullptr;
-	bool allItems = false;
-};
-
-static std::string save_transform_states(const std::vector<SceneSnapshot> &snapshots)
-{
-	obs_data_t *wrapper = obs_data_create();
-	obs_data_array_t *combinedScenes = obs_data_array_create();
-	for (const SceneSnapshot &snapshot : snapshots) {
-		if (!snapshot.scene) {
-			continue;
-		}
-
-		obs_data_t *states = obs_scene_save_transform_states(snapshot.scene, snapshot.allItems);
-		if (!states) {
-			continue;
-		}
-		obs_data_array_t *scenes = obs_data_get_array(states, "scenes_and_groups");
-		if (scenes) {
-			obs_data_array_push_back_array(combinedScenes, scenes);
-			obs_data_array_release(scenes);
-		}
-		obs_data_release(states);
-	}
-
-	obs_data_set_array(wrapper, "scenes_and_groups", combinedScenes);
-	obs_data_array_release(combinedScenes);
-	const char *json = obs_data_get_json(wrapper);
-	const std::string result = json ? json : "";
-	obs_data_release(wrapper);
-	if (result.empty()) {
-		return {};
-	}
-	return result;
-}
-
-static void apply_transform_states(const char *states)
-{
-	if (states && *states) {
-		obs_scene_load_transform_states(states);
-	}
-}
-
 static void release_selected_items(SelectedItems &selected)
 {
 	for (obs_sceneitem_t *item : selected.items) {
@@ -327,11 +416,62 @@ static void release_selected_items(SelectedItems &selected)
 	selected.items.clear();
 }
 
-struct SceneWork {
-	obs_scene_t *scene = nullptr;
-	SelectedItems selected;
-	bool allItemsForUndo = false;
+struct FilterSnapshot {
+	std::string sourceUuid;
+	ZoomFilterState state;
 };
+
+static std::string serialize_filter_states(const std::vector<FilterSnapshot> &snapshots)
+{
+	obs_data_t *wrapper = obs_data_create();
+	obs_data_array_t *items = obs_data_array_create();
+	for (const FilterSnapshot &snapshot : snapshots) {
+		obs_data_t *item = obs_data_create();
+		obs_data_set_string(item, "source_uuid", snapshot.sourceUuid.c_str());
+		obs_data_set_double(item, "zoom", snapshot.state.zoom);
+		obs_data_set_double(item, "offset_x", snapshot.state.offsetX);
+		obs_data_set_double(item, "offset_y", snapshot.state.offsetY);
+		obs_data_array_push_back(items, item);
+		obs_data_release(item);
+	}
+	obs_data_set_array(wrapper, "items", items);
+	obs_data_array_release(items);
+	const char *json = obs_data_get_json(wrapper);
+	const std::string result = json ? json : "";
+	obs_data_release(wrapper);
+	return result;
+}
+
+static void apply_filter_states(const char *json)
+{
+	if (!json || !*json) {
+		return;
+	}
+
+	obs_data_t *wrapper = obs_data_create_from_json(json);
+	if (!wrapper) {
+		return;
+	}
+	obs_data_array_t *items = obs_data_get_array(wrapper, "items");
+	if (items) {
+		for (size_t index = 0; index < obs_data_array_count(items); ++index) {
+			obs_data_t *item = obs_data_array_item(items, index);
+			const char *uuid = obs_data_get_string(item, "source_uuid");
+			obs_source_t *source = obs_get_source_by_uuid(uuid);
+			if (source) {
+				ZoomFilterState state;
+				state.zoom = obs_data_get_double(item, "zoom");
+				state.offsetX = obs_data_get_double(item, "offset_x");
+				state.offsetY = obs_data_get_double(item, "offset_y");
+				set_zoom_filter_state(source, state);
+				obs_source_release(source);
+			}
+			obs_data_release(item);
+		}
+		obs_data_array_release(items);
+	}
+	obs_data_release(wrapper);
+}
 
 static bool zoom_selected_items(const CanvasPoint &anchor, double factor)
 {
@@ -340,40 +480,21 @@ static bool zoom_selected_items(const CanvasPoint &anchor, double factor)
 	obs_scene_t *previewScene = previewSource ? obs_scene_from_source(previewSource) : nullptr;
 	obs_scene_t *programScene = programSource ? obs_scene_from_source(programSource) : nullptr;
 
-	if (!previewScene && !programScene) {
-		if (previewSource) {
-			obs_source_release(previewSource);
-		}
-		if (programSource) {
-			obs_source_release(programSource);
-		}
-		return false;
-	}
-
-	SelectedItems previewSelected;
-	SelectedItems programSelected;
+	SelectedItems selected;
+	obs_scene_t *selectedScene = nullptr;
 	if (previewScene) {
-		obs_scene_enum_items(previewScene, collect_selected_items, &previewSelected);
+		obs_scene_enum_items(previewScene, collect_selected_items, &selected);
+		if (!selected.items.empty()) {
+			selectedScene = previewScene;
+		}
 	}
-	if (programScene && programScene != previewScene) {
-		obs_scene_enum_items(programScene, collect_selected_items, &programSelected);
+	if (selected.items.empty() && programScene && programScene != previewScene) {
+		obs_scene_enum_items(programScene, collect_selected_items, &selected);
+		if (!selected.items.empty()) {
+			selectedScene = programScene;
+		}
 	}
-
-	SceneWork primary;
-	SceneWork mirror;
-	if (!previewSelected.items.empty()) {
-		primary.scene = previewScene;
-		primary.selected.items = std::move(previewSelected.items);
-		mirror.scene = programScene != previewScene ? programScene : nullptr;
-		release_selected_items(programSelected);
-	} else if (!programSelected.items.empty()) {
-		primary.scene = programScene;
-		primary.selected.items = std::move(programSelected.items);
-		mirror.scene = previewScene != programScene ? previewScene : nullptr;
-		release_selected_items(previewSelected);
-	} else {
-		release_selected_items(previewSelected);
-		release_selected_items(programSelected);
+	if (selected.items.empty()) {
 		if (previewSource) {
 			obs_source_release(previewSource);
 		}
@@ -383,135 +504,59 @@ static bool zoom_selected_items(const CanvasPoint &anchor, double factor)
 		return false;
 	}
 
-	if (mirror.scene) {
-		std::vector<std::string> sourceUuids;
-		for (obs_sceneitem_t *item : primary.selected.items) {
-			obs_source_t *source = obs_sceneitem_get_source(item);
-			const char *uuid = source ? obs_source_get_uuid(source) : nullptr;
-			if (uuid && std::find(sourceUuids.begin(), sourceUuids.end(), uuid) == sourceUuids.end()) {
-				sourceUuids.emplace_back(uuid);
-			}
-		}
+	std::vector<std::string> processedSources;
+	std::vector<FilterSnapshot> before;
+	std::vector<FilterSnapshot> after;
 
-		MatchingItems matching{&sourceUuids, &mirror.selected};
-		obs_scene_enum_items(mirror.scene, collect_matching_source_items, &matching);
-		if (mirror.selected.items.empty()) {
-			mirror.scene = nullptr;
-		}
-		mirror.allItemsForUndo = true;
-	}
-
-	std::vector<SceneSnapshot> snapshots;
-	snapshots.push_back({primary.scene, false});
-	if (mirror.scene && !mirror.selected.items.empty()) {
-		snapshots.push_back({mirror.scene, mirror.allItemsForUndo});
-	}
-	const std::string undoStates = save_transform_states(snapshots);
-
-		auto process_work = [&](SceneWork &work) {
-		for (obs_sceneitem_t *item : work.selected.items) {
-			if (!obs_sceneitem_visible(item)) {
-				obs_sceneitem_release(item);
-				continue;
-			}
-
-			CanvasPoint itemAnchor = anchor;
-			obs_sceneitem_t *group = obs_sceneitem_get_group(work.scene, item);
-			if (group && (obs_sceneitem_locked(group) || !obs_sceneitem_visible(group))) {
-				obs_sceneitem_release(item);
-				continue;
-			}
-			if (group) {
-				matrix4 groupTransform;
-				matrix4 inverseGroupTransform;
-				obs_sceneitem_get_draw_transform(group, &groupTransform);
-				if (matrix4_inv(&inverseGroupTransform, &groupTransform)) {
-					vec3 canvasAnchor;
-					vec3 localAnchor;
-					vec3_set(&canvasAnchor, float(anchor.x), float(anchor.y), 0.0f);
-					vec3_transform(&localAnchor, &canvasAnchor, &inverseGroupTransform);
-					itemAnchor.x = localAnchor.x;
-					itemAnchor.y = localAnchor.y;
-				}
-			}
-
-			auto stateIt = zoomStates.find(item);
-			if (stateIt == zoomStates.end()) {
-				ZoomState state;
-				if (!configure_fixed_frame(item, state)) {
-					obs_sceneitem_release(item);
-					continue;
-				}
-				stateIt = zoomStates.emplace(item, state).first;
-			}
-
-			const ZoomState &state = stateIt->second;
-			double ratioX = 0.0;
-			double ratioY = 0.0;
-			if (!frame_anchor_ratio(item, itemAnchor, state, ratioX, ratioY)) {
-				obs_sceneitem_release(item);
-				continue;
-			}
-
-			vec2 scale;
-			obs_sceneitem_get_scale(item, &scale);
-			obs_sceneitem_crop crop = {};
-			obs_sceneitem_get_crop(item, &crop);
-
-			const uint32_t currentWidth = cropped_dimension(state.sourceWidth, crop.left, crop.right);
-			const uint32_t currentHeight = cropped_dimension(state.sourceHeight, crop.top, crop.bottom);
-			const double sourcePointX = std::clamp(double(crop.left) + ratioX * double(currentWidth), 0.0,
-									 double(state.sourceWidth));
-			const double sourcePointY = std::clamp(double(crop.top) + ratioY * double(currentHeight), 0.0,
-									 double(state.sourceHeight));
-
-			const float nextScaleX = clamp_scale(float(double(scale.x) * factor), state.minimumScaleX);
-			const float nextScaleY = clamp_scale(float(double(scale.y) * factor), state.minimumScaleY);
-			const uint32_t nextWidth = visible_dimension_for_frame(state.frameSize.x, nextScaleX, state.sourceWidth);
-			const uint32_t nextHeight = visible_dimension_for_frame(state.frameSize.y, nextScaleY, state.sourceHeight);
-
-			obs_sceneitem_crop nextCrop = crop;
-			if (std::abs(std::abs(nextScaleX) - state.minimumScaleX) <= 0.00001f) {
-				nextCrop.left = state.baseCrop.left;
-				nextCrop.right = state.baseCrop.right;
-			} else {
-				nextCrop.left = crop_left_for_anchor(sourcePointX, ratioX, nextWidth, state.sourceWidth);
-				nextCrop.right = int(state.sourceWidth) - int(nextWidth) - nextCrop.left;
-			}
-			if (std::abs(std::abs(nextScaleY) - state.minimumScaleY) <= 0.00001f) {
-				nextCrop.top = state.baseCrop.top;
-				nextCrop.bottom = state.baseCrop.bottom;
-			} else {
-				nextCrop.top = crop_left_for_anchor(sourcePointY, ratioY, nextHeight, state.sourceHeight);
-				nextCrop.bottom = int(state.sourceHeight) - int(nextHeight) - nextCrop.top;
-			}
-
-			obs_sceneitem_defer_update_begin(item);
-			vec2 nextScale;
-			nextScale.x = nextScaleX;
-			nextScale.y = nextScaleY;
-			obs_sceneitem_set_crop(item, &nextCrop);
-			obs_sceneitem_set_scale(item, &nextScale);
-			obs_sceneitem_defer_update_end(item);
-
+	for (obs_sceneitem_t *item : selected.items) {
+		if (!obs_sceneitem_visible(item)) {
 			obs_sceneitem_release(item);
+			continue;
 		}
-	};
 
-	process_work(primary);
-	if (mirror.scene && !mirror.selected.items.empty()) {
-		process_work(mirror);
+		obs_source_t *source = obs_sceneitem_get_source(item);
+		const char *uuid = source ? obs_source_get_uuid(source) : nullptr;
+		if (!source || !uuid || std::find(processedSources.begin(), processedSources.end(), uuid) != processedSources.end()) {
+			obs_sceneitem_release(item);
+			continue;
+		}
+
+		ZoomFilterState current;
+		vec2 sourceUv;
+		if (!get_zoom_filter_state(source, current) || !source_uv_from_anchor(selectedScene, item, anchor, sourceUv)) {
+			obs_sceneitem_release(item);
+			continue;
+		}
+
+		processedSources.emplace_back(uuid);
+		before.push_back({uuid, current});
+
+		ZoomFilterState next = current;
+		next.zoom = clamp_zoom(current.zoom * factor);
+		if (std::abs(next.zoom - kMinimumZoom) < 0.000001) {
+			next.zoom = kMinimumZoom;
+			next.offsetX = 0.0;
+			next.offsetY = 0.0;
+		} else {
+			const double sourceAtCursorX = double(sourceUv.x) / current.zoom + current.offsetX;
+			const double sourceAtCursorY = double(sourceUv.y) / current.zoom + current.offsetY;
+			next.offsetX = clamp_offset(sourceAtCursorX - double(sourceUv.x) / next.zoom, next.zoom);
+			next.offsetY = clamp_offset(sourceAtCursorY - double(sourceUv.y) / next.zoom, next.zoom);
+		}
+
+		if (set_zoom_filter_state(source, next)) {
+			after.push_back({uuid, next});
+		}
+		obs_sceneitem_release(item);
 	}
 
-	std::vector<SceneSnapshot> redoSnapshots;
-	redoSnapshots.push_back({primary.scene, false});
-	if (mirror.scene && !mirror.selected.items.empty()) {
-		redoSnapshots.push_back({mirror.scene, mirror.allItemsForUndo});
-	}
-	const std::string redoStates = save_transform_states(redoSnapshots);
-	if (!undoStates.empty() && !redoStates.empty() && undoStates != redoStates) {
-		obs_frontend_add_undo_redo_action("Zoom selected source", apply_transform_states, apply_transform_states,
+	if (!before.empty() && before.size() == after.size()) {
+		const std::string undoStates = serialize_filter_states(before);
+		const std::string redoStates = serialize_filter_states(after);
+		if (!undoStates.empty() && !redoStates.empty() && undoStates != redoStates) {
+			obs_frontend_add_undo_redo_action("Zoom selected source", apply_filter_states, apply_filter_states,
 								 undoStates.c_str(), redoStates.c_str(), true);
+		}
 	}
 
 	if (previewSource) {
@@ -520,7 +565,7 @@ static bool zoom_selected_items(const CanvasPoint &anchor, double factor)
 	if (programSource) {
 		obs_source_release(programSource);
 	}
-	return true;
+	return !before.empty();
 }
 
 class ZoomScrollFilter final : public QObject {
@@ -576,6 +621,9 @@ ZoomScrollFilter *filter = nullptr;
 
 bool obs_module_load(void)
 {
+	initialize_zoom_filter_info();
+	obs_register_source(&zoom_filter_info);
+
 	QWidget *window = main_window();
 	if (!window || !qApp) {
 		blog(LOG_WARNING, "obs-zoom-scroll: OBS main window or Qt application is unavailable");
@@ -584,7 +632,7 @@ bool obs_module_load(void)
 
 	filter = new ZoomScrollFilter(nullptr);
 	qApp->installEventFilter(filter);
-	blog(LOG_INFO, "obs-zoom-scroll loaded: Ctrl+wheel zooms selected sources around the cursor");
+	blog(LOG_INFO, "obs-zoom-scroll loaded: Ctrl+wheel applies content zoom to selected sources");
 	return true;
 }
 
@@ -595,6 +643,5 @@ void obs_module_unload(void)
 		delete filter;
 		filter = nullptr;
 	}
-	zoomStates.clear();
 	blog(LOG_INFO, "obs-zoom-scroll unloaded");
 }
