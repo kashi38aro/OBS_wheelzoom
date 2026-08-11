@@ -4,7 +4,9 @@ OBS Studioでプレビュー上のソースを選択した状態で，`Ctrl`を�
 
 OBS_wheelzoom is an OBS Studio plugin that zooms the selected source toward the cursor when you hold `Ctrl` and scroll the mouse wheel in the preview．
 
-<video src="./demo/OBS_wheelzoom_demo.mp4" controls></video>
+![OBS_wheelzoom demo](./demo/OBS_wheelzoom_demo.gif)
+
+[動画ファイル（MP4）を開く](./demo/OBS_wheelzoom_demo.mp4)
 
 動画内のウェブページは [https://caind.live/](https://caind.live/) です．
 
@@ -60,7 +62,15 @@ obs-wheelzoom loaded: Ctrl+wheel zooms selected sources around the cursor
 
 ## インストーラー
 
-Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用意しています．Inno Setup 6でコンパイルすると，`dist/OBS_wheelzoom-v0.1.6-setup.exe`が生成されます．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．
+Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用意しています．Inno Setup 6でコンパイルすると，`dist/OBS_wheelzoom-v0.1.6-setup.exe`が生成されます．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．`Program Files`へ書き込むため，実行時に管理者権限が必要です．
+
+ReleaseにはインストーラーのSHA256チェックサムを添付しています．ダウンロード後は，次のコマンドでチェックサムを確認できます．
+
+```powershell
+Get-FileHash .\OBS_wheelzoom-v0.1.6-setup.exe -Algorithm SHA256
+```
+
+インストーラーへのコード署名は，信頼されたコード署名証明書が必要です．証明書を用意した環境では，`scripts/Sign-Installer.ps1`で署名できます．
 
 ## Author & License
 
