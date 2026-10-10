@@ -33,48 +33,10 @@ OBSの「ツール」→「OBS_wheelzoom」から各種設定できます．デ�
 - Windows x64: インストーラーパッケージにてRelease
 - macOS / Linux: ソースコードは移植可能な構成ですが，動作未検証です．
 
-## ビルド
-
-OBS Studioの開発用CMakeパッケージとQt 6が必要です．OBS公式のプラグインテンプレートやOBS Studioのビルド環境を用意したうえで，次のように実行します．
-
-```powershell
-cmake -S . -B build -DOBS_BUILD_DIR="C:\path\to\obs-build\install"
-cmake --build build --config Release
-cmake --install build --config Release --prefix "C:\path\to\obs-install"
-```
-
-`OBS_BUILD_DIR`は，`libobs`と`obs-frontend-api`のCMake package configが置かれているOBSのビルド／インストール先に置き換えてください．環境によっては，代わりに`CMAKE_PREFIX_PATH`へそのパスを指定します．
-
-## 手動インストール
-
-ビルド後に生成された`obs-wheelzoom`のモジュールを，OBSのプラグインフォルダへ配置します．Windowsの一般的な構成では，次の場所です．
-
-```text
-<OBS>\\obs-plugins\\64bit\\obs-wheelzoom.dll
-<OBS>\\data\\obs-plugins\\obs-wheelzoom\\locale\\en-US.ini
-```
-
-配置後にOBS Studioを再起動してください．動作確認はOBSのログに次のメッセージが出ることでも確認できます．
-
-```text
-obs-wheelzoom loaded: Ctrl+wheel zooms selected sources around the cursor
-```
-
-## インストーラー
-
-Windows向けのInno Setupスクリプトを`installer/obs-wheelzoom.iss`に用意しています．Releaseにはインストーラーと，手動展開用のZIPパッケージを用意しています．インストーラーはOBS Studioのインストール先を選択し，DLLとシェーダーを正しいプラグインフォルダへ配置します．`Program Files`へ書き込むため，実行時に管理者権限が必要です．
-
-ZIPパッケージを使う場合は，OBS Studioを終了してから，内容をOBS Studioのインストール先へ展開してください．Release本文のChecksums欄に，ダウンロードファイルのSHA256チェックサムを記載しています．ダウンロード後は，次のコマンドで確認できます．
-
-```powershell
-Get-FileHash .\OBS_wheelzoom-v1.0-setup.exe -Algorithm SHA256
-```
-
-インストーラーへのコード署名は，信頼されたコード署名証明書が必要です．証明書を用意した環境では，`scripts/Sign-Installer.ps1`で署名できます．
 
 ## Author & License
 
 - Author/Maintainer: `kashi38aro`
 - License: GNU GPL v2.0 or later（[LICENSE](https://github.com/kashi38aro/OBS_wheelzoom/blob/master/LICENSE)）．
-- Development involved the use of an AI agent．
+- Development involved the use of an Codex．
 - Independent third-party plugin for OBS Studio．
